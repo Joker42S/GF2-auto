@@ -215,7 +215,8 @@ def buy_item(is_buyout = False, item_num = 0, item_list = []):
             m_touch(btn_buy)
             if m_exists(Template(r"tpl1742209177011.png", rgb=True, record_pos=(0.12, 0.132), resolution=(1610, 932))):
                 #购买失败
-                raise
+                backarrow_common()
+                break
             collect_reward()
         else:
             backarrow_common()
@@ -268,12 +269,12 @@ def ally_area():
             m_touch(Template(r"tpl1724038051306.png", record_pos=(0.367, 0.236), resolution=(1600, 900)))
             if not m_exists(Template(r"tpl1724927868702.png", record_pos=(0.294, 0.244), resolution=(1600, 900))):
                 break
-            m_touch(Template(r"tpl1724930408405.png", rgb=True, record_pos=(-0.445, 0.326), resolution=(1222, 900)))
-            try:
-                m_touch(Template(r"tpl1724928831936.png", rgb=True, record_pos=(0.204, -0.121), resolution=(1134, 900)))
-                m_touch(Template(r"tpl1724040944534.png", record_pos=(0.107, 0.12), resolution=(1600, 900)))
-            except:
-                pass
+#             m_touch(Template(r"tpl1724930408405.png", rgb=True, record_pos=(-0.445, 0.326), resolution=(1222, 900)))
+#             try:
+#                 m_touch(Template(r"tpl1724928831936.png", rgb=True, record_pos=(0.204, -0.121), resolution=(1134, 900)))
+#                 m_touch(Template(r"tpl1724040944534.png", record_pos=(0.107, 0.12), resolution=(1600, 900)))
+#             except:
+#                 pass
             m_touch(Template(r"tpl1724038855595.png", record_pos=(0.226, 0.25), resolution=(1564, 900)))
             # #重置后直接选最前面的4个
             click((110, 384))
@@ -281,20 +282,17 @@ def ally_area():
             click((110+115*2, 384))
             click((110+115*3, 384))
             m_touch(Template(r"tpl1724039182987.png", record_pos=(0.422, 0.193), resolution=(1600, 900)))
-            m_exists(Template(r"tpl1724039206905.png", record_pos=(0.0, -0.18), resolution=(1600, 900)))
-#             m_touch(Template(r"tpl1729061686850.png", rgb=True, record_pos=(-0.297, 0.175), resolution=(1540, 900)))
-#             m_touch(Template(r"tpl1729061735035.png", record_pos=(0.018, -0.089), resolution=(1540, 900)))
-#             m_touch(Template(r"tpl1729061762626.png", record_pos=(0.234, -0.03), resolution=(1540, 900)))
-#             m_touch(Template(r"tpl1729061777015.png", record_pos=(0.018, 0.032), resolution=(1540, 900)))
-#             m_touch(Template(r"tpl1724931266467.png", record_pos=(0.107, 0.111), resolution=(1600, 900)))
-            m_touch(Template(r"tpl1739432141809.png", record_pos=(0.253, -0.133), resolution=(1610, 932)))
-            w_touch('可露凯')
+            zhuzhan_region = (260, 175, 1340, 900)
+            w_touch('电导', region = zhuzhan_region)
+            w_touch('莱娅', region = zhuzhan_region)
             m_touch(Template(r"tpl1724039310900.png", record_pos=(0.32, 0.187), resolution=(1408, 900)))
             if m_exists(Template(r"tpl1724931239978.png", record_pos=(0.0, -0.126), resolution=(1600, 900))) and w_exists('队伍中有相同角色'):
                 m_touch(Template(r"tpl1724931266467.png", record_pos=(0.107, 0.111), resolution=(1600, 900)))
+                #补空位
+                click((110+115*4, 384))
             m_touch(Template(r"tpl1724038095179.png", record_pos=(0.384, 0.244), resolution=(1600, 900)))
-            if m_exists(Template(r"tpl1724931239978.png", record_pos=(0.0, -0.126), resolution=(1600, 900))) and w_exists('仍有可上阵的位置'):
-                m_touch(Template(r"tpl1724931266467.png", record_pos=(0.107, 0.111), resolution=(1600, 900)))
+#             if m_exists(Template(r"tpl1724931239978.png", record_pos=(0.0, -0.126), resolution=(1600, 900))) and w_exists('仍有可上阵的位置'):
+#                 m_touch(Template(r"tpl1724931266467.png", record_pos=(0.107, 0.111), resolution=(1600, 900)))
             sleep(2)
 #             if not m_exists(Template(r"tpl1724927868702.png", record_pos=(0.294, 0.244), resolution=(1600, 900))):
             battle_common(360)
@@ -664,12 +662,12 @@ def shopping():
     except:
         pass
     w_touch('周期礼包')
-    try:
-        w_touch('每日补给箱')
+    w_touch('每日补给箱')
+    if w_exists('购买', is_isolating_word = True):
         w_touch('购买', is_isolating_word = True)
         collect_reward()
-    except:
-        pass
+    else:
+        backarrow_common()
     w_touch('易物所')
     w_touch('调度商店')
     buy_item(True, 14)
@@ -677,9 +675,10 @@ def shopping():
     w_touch('班组商店')
     buy_item(item_list = ['波波沙心智存档', '火控校准芯片'])
     backarrow_common()
-    w_touch('讯段交易')
-    buy_item(item_list = ['塞布丽娜心智存档', '访问许可', '基原信息核', '萨狄斯金', '次世代内存条'])
-    backarrow_common()
+    if w_exists('讯段交易'):
+        w_touch('讯段交易')
+        buy_item(item_list = ['塞布丽娜心智存档', '访问许可', '基原信息核', '萨狄斯金', '次世代内存条'])
+        backarrow_common()
     w_touch('人形堆栈')
     buy_item(item_list = ['火控校准芯片', '访问许可', '专访许可', '萨狄斯金', '大容量内存条'])
     backarrow_common()
@@ -694,7 +693,7 @@ def ocr_test():
 # ocr_test()
 reusable_activity()
 mailbox()
-ally_area()
+# ally_area()
 public_area()
 daily_battle()
 daily_task()
