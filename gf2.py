@@ -27,8 +27,13 @@ def w_touch(target_word, confidence_threshold = 0.8, is_isolating_word = False, 
 def w_click(rect):
     click(getcenter(rect))
 
-def w_exists(target_word, confidence_threshold = 0.8, is_isolating_word = False, region = None):
-    return find_word_by_ocr(target_word, confidence_threshold, is_isolating_word, region) or False
+def w_exists(target_word, confidence_threshold = 0.8, is_isolating_word = False, region = None, retry = 0):
+    for i in range(retry + 1):
+        res = find_word_by_ocr(target_word, confidence_threshold, is_isolating_word, region)
+        if res:
+            return res
+        sleep(1)
+    return False
 
 def w_wait(target_word, confidence_threshold = 0.8, is_isolating_word = False, timeout = 60, interval = 0.5, region = None):
     sum_time = 0
@@ -66,7 +71,7 @@ def getcenter(rect):
     y = (rect[0][1] + rect[2][1]) / 2
     return [x, y]
 
-def find_word_by_ocr(target_word, confidence_threshold = 0.8, is_isolating_word = False, region = None):
+def get_ocr_result(region = None):
     screen = G.DEVICE.snapshot()
     if region != None:
         screen = crop_image(screen, region)
@@ -74,6 +79,10 @@ def find_word_by_ocr(target_word, confidence_threshold = 0.8, is_isolating_word 
 #     filename = snapshot()['screen']
     img_dir = ST.LOG_DIR + '\\' + filename
     result = ocr.ocr(img_dir)[0]
+    return result
+
+def find_word_by_ocr(target_word, confidence_threshold = 0.8, is_isolating_word = False, region = None):
+    result = get_ocr_result(region)
     match_rect = None
     match_confidence = 0
     if result == None:
@@ -101,10 +110,19 @@ def find_word_by_ocr(target_word, confidence_threshold = 0.8, is_isolating_word 
         print('fail to find word: ' + target_word)
     return match_rect
 
+#通用返回体力值
+def get_stamia():
+    region = (1415, 37, 1595, 93)
+    result = get_ocr_result(region)
+    full_text = result[0][1][0]
+    print(f'Current stamia: {full_text}')
+    stamia_num = int(full_text.split('/')[0])
+    return stamia_num
+            
 #通用获得奖励 如果无奖励则返回false
 def collect_reward():
-    sleep(3.5)
-    if w_exists('获得道具'):
+    sleep(2)
+    if w_exists('获得道具', retry = 2):
         backarrow_common()
         return True
     else:
@@ -399,15 +417,15 @@ def daily_battle():
             pass
     #关闭选择对手页面
     backarrow_common()
-    #领奖励
-    try:
-        m_touch(Template(r"tpl1724040669915.png", record_pos=(-0.191, 0.269), resolution=(1387, 900)))
-        if w_exists('演习补给'):
-            backarrow_common()
-        else:
-            collect_reward()
-    except:
-        pass
+    #领奖励（不领会发邮件，可以跳过）
+#     try:
+#         m_touch(Template(r"tpl1724040669915.png", record_pos=(-0.191, 0.269), resolution=(1387, 900)))
+#         if w_exists('演习补给'):
+#             backarrow_common()
+#         else:
+#             collect_reward()
+#     except:
+#         pass
     #返回模拟作战页面
     backarrow_common()
 
@@ -458,20 +476,34 @@ def daily_battle():
 #     backarrow_common()
 
     #经验本
-    m_touch(Template(r"tpl1724041440458.png", record_pos=(-0.327, -0.082), resolution=(1214, 900)))
-    #循环同上
-    for i in range(50):
-        m_touch(Template(r"tpl1724040793103.png", record_pos=(0.261, 0.239), resolution=(1600, 900)))
-        #检查体力
-        if has_ap_alert():
-            break
-        elif w_exists('自律准备'):
-            m_touch(Template(r"tpl1724040944534.png", record_pos=(0.107, 0.12), resolution=(1600, 900)))
-            sleep(5)
-            collect_reward()
-        else:
-            raise
-    backarrow_common()
+    m_touch(Template(r"tpl1724041440458.png", record_pos=(-0.327, -0.082), resolution=(1214, 900))) 
+    def repeat_battle(battle_times, multi_factor = 1):
+        if multi_factor < 1:
+            return
+        for i in range(battle_times):
+            m_touch(Template(r"tpl1724040793103.png", record_pos=(0.261, 0.239), resolution=(1600, 900)))
+            #检查体力
+            if has_ap_alert():
+                backarrow_common()
+                break
+            elif w_exists('自律准备'):
+                if multi_factor > 1:
+                    btn_plus = m_exists(Template(r"tpl1749024786440.png", record_pos=(0.139, 0.019), resolution=(1610, 932)))
+                    for j in range(multi_factor - 1):
+                        m_touch(btn_plus)
+                m_touch(Template(r"tpl1724040944534.png", record_pos=(0.107, 0.12), resolution=(1600, 900)))
+                if has_ap_alert():
+                    backarrow_common()
+                    break
+                sleep(3)
+                collect_reward()
+            else:
+                raise
+    cur_stamia = get_stamia()
+    multi_ten, remainder = divmod(cur_stamia, 100)
+    multi_single, remainder = divmod(remainder, 10)
+    repeat_battle(multi_ten, 10)
+    repeat_battle(1, multi_single)
     #返回主页
     return_home()
 
@@ -547,9 +579,8 @@ def weekly_task():
     if not w_exists('一键领取'):
         w_touch('周期报酬')
 
-    if not w_exists('已领取本周期内全部报酬'):
-
-        m_touch(Template(r"tpl1724648538388.png", record_pos=(0.226, 0.155), resolution=(1600, 900)))
+    if not w_exists('已领取本周期内全部报酬') and w_exists('一键领取'):
+        w_touch('一键领取')
         collect_reward()
     backarrow_common()
     backarrow_common()
@@ -588,6 +619,7 @@ def frontline_activity():
     try:
         w_touch('领取')
         w_touch('获得道具')
+        sleep(2)
     except:
         pass
     return_home()
@@ -630,9 +662,8 @@ def reusable_activity():
 """
 def temporary_activity():
     w_touch('限时开启')
-    touch(Template(r"tpl1742921754091.png", record_pos=(-0.27, 0.143), resolution=(1610, 932)))
-    m_touch(Template(r"tpl1742897027103.png", record_pos=(-0.371, 0.044), resolution=(1610, 932)))
-    w_touch('物资')
+    click((150, 750))
+    w_touch('物资模式')
     w_touch('1-5')
     m_touch(Template(r"tpl1732055215502.png", record_pos=(0.291, 0.253), resolution=(1610, 932)))
     m_touch(Template(r"tpl1732055226926.png", record_pos=(0.138, 0.02), resolution=(1610, 932)))
@@ -687,13 +718,13 @@ def ocr_test():
     img_dir = ST.LOG_DIR + '\\' + snapshot()['screen']
     result = ocr.ocr(img_dir)[0]
     print(result)
-    
+
 #开始
 
 # ocr_test()
 reusable_activity()
 mailbox()
-# ally_area()
+ally_area()
 public_area()
 daily_battle()
 daily_task()
@@ -702,8 +733,8 @@ frontline_activity()
 temporary_activity()
 shopping()
 
-#TODO: 1. 增加根据位置或文本片段获取完整文本的接口，用来读取体力等数字，方便控制+号自律次数
 #TODO: 2. 实现后台截图、点击功能，并替换原生的截图、点击方法（或重写m_x和w_x方法）
 #TODO: 3. 读取配置功能，可视化配置UI
 
 
+ 
