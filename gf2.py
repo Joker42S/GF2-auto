@@ -700,8 +700,11 @@ def shopping():
     else:
         backarrow_common()
     w_touch('易物所')
+    w_touch('冬日礼品铺')
+    buy_item(True, 22)
+    backarrow_common()
     w_touch('调度商店')
-    buy_item(True, 14)
+    buy_item(item_list = ['访问许可', '紫色心意礼盒·一', '紫色心意礼盒·二', '紫色心意礼盒·三', '紫色心意礼盒·四', '紫色心意礼盒·五'])
     backarrow_common()
     w_touch('班组商店')
     buy_item(item_list = ['波波沙心智存档', '火控校准芯片'])
@@ -711,7 +714,7 @@ def shopping():
         buy_item(item_list = ['塞布丽娜心智存档', '访问许可', '基原信息核', '萨狄斯金', '次世代内存条'])
         backarrow_common()
     w_touch('人形堆栈')
-    buy_item(item_list = ['火控校准芯片', '访问许可', '专访许可', '萨狄斯金', '大容量内存条'])
+    buy_item(item_list = ['火控校准芯片', '访问许可', '专访许可', '大容量内存条'])
     backarrow_common()
 
 def ocr_test():
