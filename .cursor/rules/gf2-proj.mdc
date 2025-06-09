@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+This is a game automation project.
+This is a Win-platform project.
+This project is based on Airtest UI Automation Framework.
+You need follow Airtest's API guide in https://airtest.readthedocs.io/en/latest/.

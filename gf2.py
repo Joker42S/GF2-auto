@@ -6,17 +6,42 @@ from airtest.aircv import *
 from airtest.core.settings import Settings as ST
 from paddleocr import PaddleOCR
 import time
+import win32gui
 
-auto_setup(__file__)
+auto_setup(__file__, devices=["Windows:///?title_re=EXILIUM"])
 
 dev = device()
 ST.OPDELAY = 2
 ST.SNAPSHOT_QUALITY = 80
 
+Window_Title = 'EXILIUM'
+Title_Bar_Height = 0
+
 ocr = PaddleOCR(use_angle_cls=False)
 
+def get_window_title_bar_height():
+    global Title_Bar_Height
+    if Title_Bar_Height != 0:
+        return Title_Bar_Height
+    hwnd = win32gui.FindWindow(None, Window_Title)
+    # 获取窗口矩形
+    window_rect = win32gui.GetWindowRect(hwnd)
+    # 获取客户端矩形
+    client_rect = win32gui.GetClientRect(hwnd)
+    # 计算边框和标题栏宽度
+    border_width = (window_rect[2] - window_rect[0] - client_rect[2]) // 2
+    Title_Bar_Height = window_rect[3] - window_rect[1] - client_rect[3] - border_width * 2
+    
+    return Title_Bar_Height
 
 def w_touch(target_word, confidence_threshold = 0.8, is_isolating_word = False, region = None):
+    """
+    查找并点击指定文字
+    :param target_word: 要查找的文字
+    :param confidence_threshold: OCR识别置信度阈值，默认0.8
+    :param is_isolating_word: 是否要求完全匹配，默认False
+    :param region: 搜索区域，默认None表示全屏
+    """
     match_rect = w_exists(target_word, confidence_threshold, is_isolating_word, region)
     if match_rect:
         w_click(match_rect)
@@ -25,9 +50,25 @@ def w_touch(target_word, confidence_threshold = 0.8, is_isolating_word = False, 
         raise
 
 def w_click(rect):
+    """
+    点击指定矩形区域的中心点
+    :param rect: 矩形区域坐标
+    """
     click(getcenter(rect))
 
+def click_fixed_pos(x, y):
+    click((x, y + get_window_title_bar_height()))
+
 def w_exists(target_word, confidence_threshold = 0.8, is_isolating_word = False, region = None, retry = 0):
+    """
+    检查指定文字是否存在
+    :param target_word: 要查找的文字
+    :param confidence_threshold: OCR识别置信度阈值，默认0.8
+    :param is_isolating_word: 是否要求完全匹配，默认False
+    :param region: 搜索区域，默认None表示全屏
+    :param retry: 重试次数，默认0
+    :return: 如果找到文字返回其矩形区域，否则返回False
+    """
     for i in range(retry + 1):
         res = find_word_by_ocr(target_word, confidence_threshold, is_isolating_word, region)
         if res:
@@ -36,6 +77,16 @@ def w_exists(target_word, confidence_threshold = 0.8, is_isolating_word = False,
     return False
 
 def w_wait(target_word, confidence_threshold = 0.8, is_isolating_word = False, timeout = 60, interval = 0.5, region = None):
+    """
+    等待指定文字出现
+    :param target_word: 要等待的文字
+    :param confidence_threshold: OCR识别置信度阈值，默认0.8
+    :param is_isolating_word: 是否要求完全匹配，默认False
+    :param timeout: 超时时间（秒），默认60
+    :param interval: 检查间隔（秒），默认0.5
+    :param region: 搜索区域，默认None表示全屏
+    :return: 找到文字时返回其矩形区域
+    """
     sum_time = 0
     match_rect = None
     while sum_time < timeout:
@@ -50,15 +101,34 @@ def w_wait(target_word, confidence_threshold = 0.8, is_isolating_word = False, t
     return match_rect
 
 def m_touch(*args):
-#     dev.mouse_move((1900, 1000))
+    """
+    触摸指定位置或模板
+    :param args: 位置坐标或模板对象
+    """
     return touch(*args)
+
 def m_exists(*args):
-#     dev.mouse_move((1900, 1000))
+    """
+    检查指定位置或模板是否存在
+    :param args: 位置坐标或模板对象
+    """
     return exists(*args)
+
 def m_wait(*args):
-#     dev.mouse_move((1900, 1000))
+    """
+    等待指定位置或模板出现
+    :param args: 位置坐标或模板对象
+    """
     return wait(*args)
+
 def add_offset(rect, offset_x, offset_y):
+    """
+    为矩形区域添加偏移量
+    :param rect: 原始矩形区域
+    :param offset_x: X轴偏移量
+    :param offset_y: Y轴偏移量
+    :return: 新的矩形区域
+    """
     new_rect = []
     for i in range(4):
         new_x = rect[i][0] + offset_x
@@ -67,21 +137,39 @@ def add_offset(rect, offset_x, offset_y):
     return new_rect
     
 def getcenter(rect):
+    """
+    获取矩形区域的中心点坐标
+    :param rect: 矩形区域
+    :return: 中心点坐标 [x, y]
+    """
     x = (rect[0][0] + rect[2][0]) / 2
     y = (rect[0][1] + rect[2][1]) / 2
     return [x, y]
 
 def get_ocr_result(region = None):
+    """
+    获取屏幕OCR识别结果
+    :param region: 识别区域，默认None表示全屏
+    :return: OCR识别结果列表
+    """
     screen = G.DEVICE.snapshot()
     if region != None:
-        screen = crop_image(screen, region)
+        abs_region = (region[0], region[1] + get_window_title_bar_height(), region[2], region[3] + get_window_title_bar_height())
+        screen = crop_image(screen, abs_region)
     filename = try_log_screen(screen)['screen']
-#     filename = snapshot()['screen']
     img_dir = ST.LOG_DIR + '\\' + filename
     result = ocr.ocr(img_dir)[0]
     return result
 
 def find_word_by_ocr(target_word, confidence_threshold = 0.8, is_isolating_word = False, region = None):
+    """
+    使用OCR查找指定文字
+    :param target_word: 要查找的文字
+    :param confidence_threshold: OCR识别置信度阈值，默认0.8
+    :param is_isolating_word: 是否要求完全匹配，默认False
+    :param region: 搜索区域，默认None表示全屏
+    :return: 找到文字时返回其矩形区域，否则返回None
+    """
     result = get_ocr_result(region)
     match_rect = None
     match_confidence = 0
@@ -102,7 +190,7 @@ def find_word_by_ocr(target_word, confidence_threshold = 0.8, is_isolating_word 
             match_rect = ocr_res[0]
     if match_rect:
         if region is not None:
-            match_rect = add_offset(match_rect, region[0], region[1])
+            match_rect = add_offset(match_rect, region[0], region[1] + get_window_title_bar_height())
         print(f'find word:{target_word}, confidence:{confidence}')
         print(match_rect)
     else:
@@ -110,17 +198,23 @@ def find_word_by_ocr(target_word, confidence_threshold = 0.8, is_isolating_word 
         print('fail to find word: ' + target_word)
     return match_rect
 
-#通用返回体力值
 def get_stamia():
-    region = (1415, 37, 1595, 93)
+    """
+    获取当前体力值
+    :return: 当前体力值（整数）
+    """
+    region = (1415, 7, 1595, 63)
     result = get_ocr_result(region)
     full_text = result[0][1][0]
     print(f'Current stamia: {full_text}')
     stamia_num = int(full_text.split('/')[0])
     return stamia_num
             
-#通用获得奖励 如果无奖励则返回false
 def collect_reward():
+    """
+    收集奖励
+    :return: 是否成功收集奖励
+    """
     sleep(2)
     if w_exists('获得道具', retry = 2):
         backarrow_common()
@@ -128,20 +222,18 @@ def collect_reward():
     else:
         return False
 
-#通用的返回主页
 def return_home():
-#     #委托 战役
-#     try:
-#         m_touch(Template(r"tpl1724043062335.png", record_pos=(-0.425, -0.254), resolution=(1600, 900)))
-#     except:
-#         #班组 公共区
-#         m_touch(Template(r"tpl1724043144393.png", record_pos=(-0.422, -0.254), resolution=(1600, 900)))
-#     else:
-#         pass
-    click((125, 75))
+    """
+    返回主页
+    """
+    click_fixed_pos(125, 45)
 
-#通用战斗
 def battle_common(esimated_time = 300, is_surrender = False):
+    """
+    通用战斗流程
+    :param esimated_time: 预计战斗时间（秒），默认300
+    :param is_surrender: 是否投降，默认False
+    """
     #等待加载
     for i in range(5):
         sleep(10)
@@ -162,7 +254,7 @@ def battle_common(esimated_time = 300, is_surrender = False):
         return
     m_touch(Template(r"tpl1724037341185.png", record_pos=(0.01, 0.235), resolution=(1569, 900)))
     #跳出场动画
-    click((800, 450))
+    click_fixed_pos(800, 420)
     sleep(10)
     #自动战斗
     dev.key_press('o')
@@ -181,35 +273,36 @@ def battle_common(esimated_time = 300, is_surrender = False):
             break
         _timer_battle += 10
     #此处可能出现的页面： 段位晋升、
-    click((800, 450))
+    click_fixed_pos(800, 420)
     sleep(2)
-    click((800, 450))
+    click_fixed_pos(800, 420)
     m_touch(Template(r"tpl1724037860299.png", record_pos=(0.33, 0.231), resolution=(1600, 900)))
     sleep(10)
 
-#通用的返回按钮
 def backarrow_common():
-    click((55, 75))
-#     m_touch(Template(r"tpl1724037110631.png", record_pos=(-0.462, -0.324), resolution=(1255, 900)))
+    """
+    点击返回按钮
+    """
+    click_fixed_pos(55, 45)
 
-#检查是否有体力不足提示
 def has_ap_alert():
+    """
+    检查是否有体力不足提示
+    :return: 是否有体力不足提示
+    """
     if w_exists('情报拼图补充'):
         m_touch(Template(r"tpl1724226645988.png", record_pos=(-0.108, 0.114), resolution=(1600, 900)))
         return True
     else:
         return False
 
-#伤害统计按钮
-# m_exists(Template(r"tpl1724037756810.png", record_pos=(-0.438, 0.325), resolution=(1140, 900)))
-# m_touch(Template(r"tpl1724037404622.png", record_pos=(0.395, -0.263), resolution=(1569, 900)))
-# #自动按钮的位置
-# click((1413, 69))
-#弹窗的关闭按钮
-# m_touch(Template(r"tpl1724037909329.png", record_pos=(0.34, -0.153), resolution=(1600, 900)))
-
-#购买限量商品
 def buy_item(is_buyout = False, item_num = 0, item_list = []):
+    """
+    购买物品
+    :param is_buyout: 是否清空商店，默认False
+    :param item_num: 要购买的商品数量，默认0
+    :param item_list: 要购买的商品列表，默认空列表
+    """
     v_range = 0
     if is_buyout:
         v_range = item_num
@@ -218,7 +311,7 @@ def buy_item(is_buyout = False, item_num = 0, item_list = []):
     for i in range(v_range):
         if is_buyout:
             #点击第一个商品的固定位置
-            click((386,245))
+            click_fixed_pos(386, 215)
         else:
             btn_item = w_exists(item_list[i])
             if not btn_item:
@@ -240,13 +333,8 @@ def buy_item(is_buyout = False, item_num = 0, item_list = []):
             backarrow_common()
             if is_buyout:
                 #已经卖空
-                break
+                break 
 
-"""
----
-邮箱
----
-"""
 def mailbox():
     if not m_exists(Template(r"tpl1737028627007.png", threshold=0.9000000000000001, record_pos=(-0.443, 0.125), resolution=(1610, 932))):
         return
@@ -256,11 +344,6 @@ def mailbox():
     collect_reward()
     return_home()
     
-"""
----
-公会战
----
-"""
 def ally_area():
     w_touch('班组')
     m_touch(Template(r"tpl1724037004746.png", record_pos=(0.188, 0.237), resolution=(1600, 900)))
@@ -287,18 +370,12 @@ def ally_area():
             m_touch(Template(r"tpl1724038051306.png", record_pos=(0.367, 0.236), resolution=(1600, 900)))
             if not m_exists(Template(r"tpl1724927868702.png", record_pos=(0.294, 0.244), resolution=(1600, 900))):
                 break
-#             m_touch(Template(r"tpl1724930408405.png", rgb=True, record_pos=(-0.445, 0.326), resolution=(1222, 900)))
-#             try:
-#                 m_touch(Template(r"tpl1724928831936.png", rgb=True, record_pos=(0.204, -0.121), resolution=(1134, 900)))
-#                 m_touch(Template(r"tpl1724040944534.png", record_pos=(0.107, 0.12), resolution=(1600, 900)))
-#             except:
-#                 pass
             m_touch(Template(r"tpl1724038855595.png", record_pos=(0.226, 0.25), resolution=(1564, 900)))
             # #重置后直接选最前面的4个
-            click((110, 384))
-            click((110+115, 384))
-            click((110+115*2, 384))
-            click((110+115*3, 384))
+            click_fixed_pos(110, 354)
+            click_fixed_pos(110+115, 354)
+            click_fixed_pos(110+115*2, 354)
+            click_fixed_pos(110+115*3, 354)
             m_touch(Template(r"tpl1724039182987.png", record_pos=(0.422, 0.193), resolution=(1600, 900)))
             zhuzhan_region = (260, 175, 1340, 900)
             w_touch('电导', region = zhuzhan_region)
@@ -307,15 +384,10 @@ def ally_area():
             if m_exists(Template(r"tpl1724931239978.png", record_pos=(0.0, -0.126), resolution=(1600, 900))) and w_exists('队伍中有相同角色'):
                 m_touch(Template(r"tpl1724931266467.png", record_pos=(0.107, 0.111), resolution=(1600, 900)))
                 #补空位
-                click((110+115*4, 384))
+                click_fixed_pos(110+115*4, 354)
             m_touch(Template(r"tpl1724038095179.png", record_pos=(0.384, 0.244), resolution=(1600, 900)))
-#             if m_exists(Template(r"tpl1724931239978.png", record_pos=(0.0, -0.126), resolution=(1600, 900))) and w_exists('仍有可上阵的位置'):
-#                 m_touch(Template(r"tpl1724931266467.png", record_pos=(0.107, 0.111), resolution=(1600, 900)))
             sleep(2)
-#             if not m_exists(Template(r"tpl1724927868702.png", record_pos=(0.294, 0.244), resolution=(1600, 900))):
             battle_common(360)
-#             else:
-#                 break
         w_touch('前线补给')
         try:
             m_touch(Template(r"tpl1739433596338.png", record_pos=(-0.002, 0.132), resolution=(1610, 932)))
@@ -332,12 +404,6 @@ def ally_area():
     #返回主页
     return_home()
 
-
-"""
----
-公共区
----
-"""
 def public_area():
     w_touch('公共区')
     w_touch('调度室')
@@ -367,32 +433,23 @@ def public_area():
     #返回主页
     return_home()
 
-"""
----
-清体力
----
-"""
 def daily_battle():
     w_touch('战役推进')
-    #切回初始页
-#     if not m_exists(Template(r"tpl1724237282638.png", threshold=0.6, rgb=True, record_pos=(0.072, -0.254), resolution=(1600, 900))):
-#         m_touch(Template(r"tpl1724236408766.png", record_pos=(0.069, -0.256), resolution=(1600, 900)))
     w_touch('模拟作战')
-#     click((1468, 76))
     #实兵演习
     w_touch('实兵演习')
     #每周的结算页面
-    click((800, 450))
+    click_fixed_pos(800, 420)
     sleep(1)
-    click((800, 450))
+    click_fixed_pos(800, 420)
     sleep(1)
-    click((800, 450))
+    click_fixed_pos(800, 420)
     sleep(1)
-    click((800, 450))
+    click_fixed_pos(800, 420)
     sleep(1)
-    click((800, 450))
+    click_fixed_pos(800, 420)
     sleep(1)
-    click((800, 450))
+    click_fixed_pos(800, 420)
     m_touch(Template(r"tpl1724040492694.png", record_pos=(0.38, 0.245), resolution=(1600, 900)))
     #每天3次 打1次退2次
     first_battle = True
@@ -402,7 +459,7 @@ def daily_battle():
         if m_exists(Template(r"tpl1724236208525.png", record_pos=(0.001, -0.127), resolution=(1600, 900))):
             m_touch(Template(r"tpl1724236220728.png", record_pos=(-0.107, 0.113), resolution=(1600, 900)))
         #直接选中间的对手
-        click((800, 450))
+        click_fixed_pos(800, 420)
         if w_exists('基础防守演习'):
             m_touch(Template(r"tpl1724224751372.png", record_pos=(0.261, 0.124), resolution=(1600, 900)))
             sleep(2)
@@ -417,64 +474,10 @@ def daily_battle():
             pass
     #关闭选择对手页面
     backarrow_common()
-    #领奖励（不领会发邮件，可以跳过）
-#     try:
-#         m_touch(Template(r"tpl1724040669915.png", record_pos=(-0.191, 0.269), resolution=(1387, 900)))
-#         if w_exists('演习补给'):
-#             backarrow_common()
-#         else:
-#             collect_reward()
-#     except:
-#         pass
     #返回模拟作战页面
     backarrow_common()
 
-    # #首领挑战
-    # m_touch(Template(r"tpl1724042286132.png", record_pos=(-0.23, -0.172), resolution=(1365, 900)))
-    # # m_touch(Template(r"tpl1724042318400.png", record_pos=(0.339, 0.281), resolution=(1365, 900)))
-    # # click((1250, 864))
-    # m_touch(Template(r"tpl1724042454950.png", record_pos=(0.215, 0.239), resolution=(1600, 900)))
-    # #需要判断是否到达上限
-    # m_touch(Template(r"tpl1724040820485.png", record_pos=(0.139, 0.02), resolution=(1600, 900)))
-    # m_touch(Template(r"tpl1724040820485.png", record_pos=(0.139, 0.02), resolution=(1600, 900)))
-    # m_touch(Template(r"tpl1724042530923.png", record_pos=(0.107, 0.118), resolution=(1600, 900)))
-
-
     w_touch('补给作战')
-    #金条本
-#     m_touch(Template(r"tpl1724040775324.png", record_pos=(0.371, -0.061), resolution=(1600, 900)))
-#     for i in range(4):
-#         m_touch(Template(r"tpl1724040793103.png", record_pos=(0.261, 0.239), resolution=(1600, 900)))
-#         #检查体力
-#         if has_ap_alert():
-#             pass
-#         #判断是否到达上限
-#         elif not m_exists(Template(r"tpl1724225998770.png", record_pos=(0.0, -0.134), resolution=(1600, 900))):
-#             pass
-#         else:
-#             m_touch(Template(r"tpl1724040944534.png", record_pos=(0.107, 0.12), resolution=(1600, 900)))
-#             collect_reward()
-#     backarrow_common()
-    #配件本
-#     m_touch(Template(r"tpl1724041079905.png", record_pos=(0.186, -0.064), resolution=(1600, 900)))
-    #重复刷配件本 直到体力不足30或仓库满 最多十次
-#     for i in range(10):
-#         m_touch(Template(r"tpl1724040793103.png", record_pos=(0.261, 0.239), resolution=(1600, 900)))
-#         #检查体力
-#         if has_ap_alert():
-#             break
-#         elif m_exists(Template(r"tpl1724227350706.png", record_pos=(-0.001, -0.147), resolution=(1600, 900))) and m_exists(Template(r"tpl1725702785010.png", record_pos=(-0.001, -0.1), resolution=(1600, 900))):
-#             m_touch(Template(r"tpl1724226363040.png", record_pos=(0.108, 0.166), resolution=(1600, 900)))
-#             m_touch(Template(r"tpl1724040944534.png", record_pos=(0.107, 0.12), resolution=(1600, 900)))
-#             collect_reward()
-#         #配件超过上限
-#         elif m_exists(Template(r"tpl1724226299872.png", record_pos=(0.001, -0.127), resolution=(1600, 900))):
-#             m_touch(Template(r"tpl1724226323564.png", record_pos=(-0.107, 0.113), resolution=(1600, 900)))
-#             break
-#         else:
-#             raise
-#     backarrow_common()
-
     #经验本
     m_touch(Template(r"tpl1724041440458.png", record_pos=(-0.327, -0.082), resolution=(1214, 900))) 
     def repeat_battle(battle_times, multi_factor = 1):
@@ -507,11 +510,6 @@ def daily_battle():
     #返回主页
     return_home()
 
-"""
----
-每日任务
----
-"""
 def daily_task():
     w_touch('委托')
     if w_exists('已全部领取'):
@@ -531,7 +529,6 @@ def daily_task():
     
     if w_exists('巡录'):
         w_touch('巡录')
-        #TODO: 添加通行证未开放或第一次打开时的情况
         w_touch('沿途行动')
         try:
             m_touch(Template(r"tpl1724042132942.png", record_pos=(0.367, 0.249), resolution=(1600, 900)))
@@ -548,12 +545,10 @@ def daily_task():
             collect_reward()
         return_home()
 
-#如果没有找到需要选择的通行证奖励 返回False
 def select_bp_reward():
     if not m_exists(Template(r"tpl1724555019676.png", rgb=True, record_pos=(-0.071, 0.133), resolution=(1600, 900))):
         return False
     if w_exists('拂晓之光补给包'):
-#         w_touch('坍塌晶条')
         touch(Template(r"tpl1742921042606.png", threshold=0.8, rgb=True, record_pos=(-0.237, -0.072), resolution=(1610, 932)))
         touch(Template(r"tpl1724237055401.png", record_pos=(0.107, 0.133), resolution=(1600, 900)))
         return True
@@ -564,16 +559,8 @@ def select_bp_reward():
     else:
         return False
 
-"""
----
-每周任务
----
-"""
 def weekly_task():
     w_touch('战役推进')
-    #切回初始页
-#     if not m_exists(Template(r"tpl1724237282638.png", threshold=0.6, rgb=True, record_pos=(0.072, -0.254), resolution=(1600, 900))):
-#         m_touch(Template(r"tpl1724236408766.png", record_pos=(0.069, -0.256), resolution=(1600, 900)))
     w_touch('模拟作战')
     m_touch(Template(r"tpl1724648488359.png", rgb=True, record_pos=(0.103, -0.147), resolution=(1600, 900)))
     if not w_exists('一键领取'):
@@ -600,11 +587,6 @@ def weekly_task():
             break
     return_home()
 
-"""
----
-边界推进
----
-"""
 def frontline_activity():
     w_touch('限时开启')
     w_touch('边界推进')
@@ -624,11 +606,6 @@ def frontline_activity():
         pass
     return_home()
 
-"""
----
-重复活动
----
-"""
 def reusable_activity():
     w_touch('活动')
     btn_zhanqianbuji = w_exists('战前补给')
@@ -652,17 +629,10 @@ def reusable_activity():
         except:
             pass
     return_home()
-        
 
-
-"""
----
-限时活动
----
-"""
 def temporary_activity():
     w_touch('限时开启')
-    click((150, 750))
+    click_fixed_pos(150, 720)
     w_touch('物资模式')
     w_touch('1-5')
     m_touch(Template(r"tpl1732055215502.png", record_pos=(0.291, 0.253), resolution=(1610, 932)))
@@ -677,11 +647,6 @@ def temporary_activity():
     backarrow_common()
     return_home()
     
-"""
----
-商店
----
-"""
 def shopping():
     w_touch('商城')
     w_touch('品质甄选')
@@ -717,27 +682,18 @@ def shopping():
     buy_item(item_list = ['火控校准芯片', '访问许可', '专访许可', '大容量内存条'])
     backarrow_common()
 
-def ocr_test():
-    img_dir = ST.LOG_DIR + '\\' + snapshot()['screen']
-    result = ocr.ocr(img_dir)[0]
-    print(result)
-
-#开始
-
-# ocr_test()
-reusable_activity()
-mailbox()
-ally_area()
-public_area()
-daily_battle()
-daily_task()
-weekly_task()
-frontline_activity()
-temporary_activity()
-shopping()
-
-#TODO: 2. 实现后台截图、点击功能，并替换原生的截图、点击方法（或重写m_x和w_x方法）
-#TODO: 3. 读取配置功能，可视化配置UI
+if __name__ == "__main__":
+    reusable_activity()
+    mailbox()
+    ally_area()
+    public_area()
+    daily_battle()
+    daily_task()
+    weekly_task()
+    frontline_activity()
+    temporary_activity()
+    shopping() 
 
 
- 
+
+
