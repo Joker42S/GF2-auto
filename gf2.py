@@ -7,6 +7,11 @@ from airtest.core.settings import Settings as ST
 from paddleocr import PaddleOCR
 import time
 import win32gui
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, QPushButton, QTextEdit, QLabel
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QFont
+import json
+import os
 
 auto_setup(__file__, devices=["Windows:///?title_re=EXILIUM"])
 
@@ -18,6 +23,154 @@ Window_Title = 'EXILIUM'
 Title_Bar_Height = 0
 
 ocr = PaddleOCR(use_angle_cls=False)
+
+# 任务列表
+TASKS = {
+    'reusable_activity': '日常活动',
+    'mailbox': '邮箱',
+    'ally_area': '班组区域',
+    'public_area': '公共区',
+    'daily_battle': '每日战斗',
+    'daily_task': '每日任务',
+    'weekly_task': '每周任务',
+    'frontline_activity': '前线活动',
+    'temporary_activity': '临时活动',
+    'shopping': '购物'
+}
+
+class TaskThread(QThread):
+    log_signal = pyqtSignal(str)
+    task_status_signal = pyqtSignal(str, bool)  # 任务名, 是否成功
+
+    def __init__(self, tasks):
+        super().__init__()
+        self.tasks = tasks
+        self.is_running = True
+
+    def run(self):
+        for task_name in self.tasks:
+            if not self.is_running:
+                break
+            try:
+                self.log_signal.emit(f"开始执行: {TASKS[task_name]}")
+                task_func = globals()[task_name]
+                task_func()
+                self.task_status_signal.emit(task_name, True)
+                self.log_signal.emit(f"执行成功: {TASKS[task_name]}")
+            except Exception as e:
+                self.task_status_signal.emit(task_name, False)
+                self.log_signal.emit(f"执行失败: {TASKS[task_name]}, 错误: {str(e)}")
+        self.log_signal.emit("所有任务执行完毕")
+
+    def stop(self):
+        self.is_running = False
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.task_thread = None
+        self.init_ui()
+        self.load_last_tasks()
+
+    def init_ui(self):
+        self.setWindowTitle('GF2自动化工具')
+        self.setGeometry(100, 100, 1200, 800)  # 增加窗口大小
+
+        # 设置大字体
+        big_font = QFont()
+        big_font.setPointSize(16)  # 设置字体大小为16
+        self.setFont(big_font)
+
+        # 创建主窗口部件
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
+
+        # 创建任务选择区域
+        tasks_layout = QVBoxLayout()
+        self.task_checkboxes = {}
+        for task_id, task_name in TASKS.items():
+            checkbox = QCheckBox(task_name)
+            checkbox.setFont(big_font)  # 设置复选框字体
+            checkbox.setChecked(True)  # 默认选中
+            self.task_checkboxes[task_id] = checkbox
+            tasks_layout.addWidget(checkbox)
+        layout.addLayout(tasks_layout)
+
+        # 创建按钮区域
+        button_layout = QHBoxLayout()
+        self.start_button = QPushButton('开始执行')
+        self.stop_button = QPushButton('停止执行')
+        self.start_button.setFont(big_font)  # 设置按钮字体
+        self.stop_button.setFont(big_font)  # 设置按钮字体
+        self.stop_button.setEnabled(False)
+        button_layout.addWidget(self.start_button)
+        button_layout.addWidget(self.stop_button)
+        layout.addLayout(button_layout)
+
+        # 创建日志区域
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setFont(big_font)  # 设置日志区域字体
+        layout.addWidget(self.log_text)
+
+        # 连接信号
+        self.start_button.clicked.connect(self.start_tasks)
+        self.stop_button.clicked.connect(self.stop_tasks)
+
+    def log(self, message):
+        self.log_text.append(message)
+
+    def start_tasks(self):
+        selected_tasks = [task_id for task_id, checkbox in self.task_checkboxes.items() 
+                         if checkbox.isChecked()]
+        if not selected_tasks:
+            self.log("请至少选择一个任务")
+            return
+
+        self.save_tasks(selected_tasks)
+        self.start_button.setEnabled(False)
+        self.stop_button.setEnabled(True)
+        
+        self.task_thread = TaskThread(selected_tasks)
+        self.task_thread.log_signal.connect(self.log)
+        self.task_thread.task_status_signal.connect(self.update_task_status)
+        self.task_thread.finished.connect(self.on_tasks_finished)
+        self.task_thread.start()
+
+    def stop_tasks(self):
+        if self.task_thread:
+            self.task_thread.stop()
+            self.log("正在停止任务...")
+
+    def on_tasks_finished(self):
+        self.start_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
+
+    def update_task_status(self, task_id, success):
+        checkbox = self.task_checkboxes[task_id]
+        if success:
+            checkbox.setStyleSheet("color: green")
+        else:
+            checkbox.setStyleSheet("color: red")
+
+    def save_tasks(self, tasks):
+        with open('last_tasks.json', 'w', encoding='utf-8') as f:
+            json.dump(tasks, f)
+
+    def load_last_tasks(self):
+        try:
+            if os.path.exists('last_tasks.json'):
+                with open('last_tasks.json', 'r', encoding='utf-8') as f:
+                    last_tasks = json.load(f)
+                    for task_id in last_tasks:
+                        if task_id in self.task_checkboxes:
+                            self.task_checkboxes[task_id].setChecked(True)
+        except Exception as e:
+            self.log(f"加载上次任务失败: {str(e)}")
+            # 如果加载失败，默认选中所有任务
+            for checkbox in self.task_checkboxes.values():
+                checkbox.setChecked(True)
 
 def get_window_title_bar_height():
     global Title_Bar_Height
@@ -683,16 +836,10 @@ def shopping():
     backarrow_common()
 
 if __name__ == "__main__":
-    reusable_activity()
-    mailbox()
-    ally_area()
-    public_area()
-    daily_battle()
-    daily_task()
-    weekly_task()
-    frontline_activity()
-    temporary_activity()
-    shopping() 
+    app = QApplication([])
+    window = MainWindow()
+    window.show()
+    app.exec_() 
 
 
 
