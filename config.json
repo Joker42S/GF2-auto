@@ -1,0 +1,11 @@
+{
+    "activity_name": "拂晓的回响",
+    "activity_shop": "营地小店",
+    "last_tasks": [
+        "daily_task",
+        "weekly_task",
+        "frontline_activity",
+        "temporary_activity",
+        "shopping"
+    ]
+}

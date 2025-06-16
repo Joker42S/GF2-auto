@@ -24,6 +24,9 @@ Title_Bar_Height = 0
 
 ocr = PaddleOCR(use_angle_cls=False)
 
+# 全局变量
+window = None
+
 # 任务列表
 TASKS = {
     'reusable_activity': '日常活动',
@@ -70,7 +73,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.task_thread = None
         self.init_ui()
-        self.load_last_tasks()
+        self.load_config()
 
     def init_ui(self):
         self.setWindowTitle('GF2自动化工具')
@@ -85,6 +88,29 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
+
+        # 创建配置区域
+        config_layout = QHBoxLayout()
+        
+        # 活动名称配置
+        activity_label = QLabel('活动名称:')
+        activity_label.setFont(big_font)
+        self.activity_input = QTextEdit()
+        self.activity_input.setMaximumHeight(50)
+        self.activity_input.setFont(big_font)
+        config_layout.addWidget(activity_label)
+        config_layout.addWidget(self.activity_input)
+        
+        # 商店名称配置
+        shop_label = QLabel('商店名称:')
+        shop_label.setFont(big_font)
+        self.shop_input = QTextEdit()
+        self.shop_input.setMaximumHeight(50)
+        self.shop_input.setFont(big_font)
+        config_layout.addWidget(shop_label)
+        config_layout.addWidget(self.shop_input)
+        
+        layout.addLayout(config_layout)
 
         # 创建任务选择区域
         tasks_layout = QVBoxLayout()
@@ -118,17 +144,58 @@ class MainWindow(QMainWindow):
         self.start_button.clicked.connect(self.start_tasks)
         self.stop_button.clicked.connect(self.stop_tasks)
 
+    def load_config(self):
+        try:
+            if os.path.exists('config.json'):
+                with open('config.json', 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    self.activity_input.setText(config.get('activity_name', '拂晓的回响'))
+                    self.shop_input.setText(config.get('activity_shop', '营地小店'))
+                    # 加载上次选择的任务
+                    last_tasks = config.get('last_tasks', [])
+                    for task_id in last_tasks:
+                        if task_id in self.task_checkboxes:
+                            self.task_checkboxes[task_id].setChecked(True)
+            else:
+                # 如果配置文件不存在，尝试从last_tasks.json加载
+                if os.path.exists('last_tasks.json'):
+                    with open('last_tasks.json', 'r', encoding='utf-8') as f:
+                        last_tasks = json.load(f)
+                        for task_id in last_tasks:
+                            if task_id in self.task_checkboxes:
+                                self.task_checkboxes[task_id].setChecked(True)
+                    # 迁移完成后删除旧文件
+                    os.remove('last_tasks.json')
+        except Exception as e:
+            self.log(f"加载配置失败: {str(e)}")
+            self.activity_input.setText('拂晓的回响')
+            self.shop_input.setText('营地小店')
+            # 如果加载失败，默认选中所有任务
+            for checkbox in self.task_checkboxes.values():
+                checkbox.setChecked(True)
+
+    def save_config(self):
+        selected_tasks = [task_id for task_id, checkbox in self.task_checkboxes.items() 
+                         if checkbox.isChecked()]
+        config = {
+            'activity_name': self.activity_input.toPlainText(),
+            'activity_shop': self.shop_input.toPlainText(),
+            'last_tasks': selected_tasks
+        }
+        with open('config.json', 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+
     def log(self, message):
         self.log_text.append(message)
 
     def start_tasks(self):
+        self.save_config()  # 保存配置
         selected_tasks = [task_id for task_id, checkbox in self.task_checkboxes.items() 
                          if checkbox.isChecked()]
         if not selected_tasks:
             self.log("请至少选择一个任务")
             return
 
-        self.save_tasks(selected_tasks)
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         
@@ -153,24 +220,6 @@ class MainWindow(QMainWindow):
             checkbox.setStyleSheet("color: green")
         else:
             checkbox.setStyleSheet("color: red")
-
-    def save_tasks(self, tasks):
-        with open('last_tasks.json', 'w', encoding='utf-8') as f:
-            json.dump(tasks, f)
-
-    def load_last_tasks(self):
-        try:
-            if os.path.exists('last_tasks.json'):
-                with open('last_tasks.json', 'r', encoding='utf-8') as f:
-                    last_tasks = json.load(f)
-                    for task_id in last_tasks:
-                        if task_id in self.task_checkboxes:
-                            self.task_checkboxes[task_id].setChecked(True)
-        except Exception as e:
-            self.log(f"加载上次任务失败: {str(e)}")
-            # 如果加载失败，默认选中所有任务
-            for checkbox in self.task_checkboxes.values():
-                checkbox.setChecked(True)
 
 def get_window_title_bar_height():
     global Title_Bar_Height
@@ -436,7 +485,8 @@ def backarrow_common():
     """
     点击返回按钮
     """
-    click_fixed_pos(55, 45)
+    # click_fixed_pos(55, 45)
+    keyevent("{ESC}")
 
 def has_ap_alert():
     """
@@ -448,6 +498,15 @@ def has_ap_alert():
         return True
     else:
         return False
+    
+def touch_btn_plus(count):
+    """
+    点击加号按钮
+    :param count: 点加号按钮的次数
+    """
+    btn_plus = m_exists(Template(r"tpl1749024786440.png", record_pos=(0.139, 0.019), resolution=(1610, 932)))
+    for j in range(count):
+        m_touch(btn_plus)
 
 def buy_item(is_buyout = False, item_num = 0, item_list = []):
     """
@@ -644,9 +703,7 @@ def daily_battle():
                 break
             elif w_exists('自律准备'):
                 if multi_factor > 1:
-                    btn_plus = m_exists(Template(r"tpl1749024786440.png", record_pos=(0.139, 0.019), resolution=(1610, 932)))
-                    for j in range(multi_factor - 1):
-                        m_touch(btn_plus)
+                    touch_btn_plus(multi_factor - 1)
                 m_touch(Template(r"tpl1724040944534.png", record_pos=(0.107, 0.12), resolution=(1600, 900)))
                 if has_ap_alert():
                     backarrow_common()
@@ -785,12 +842,12 @@ def reusable_activity():
 
 def temporary_activity():
     w_touch('限时开启')
-    click_fixed_pos(150, 720)
+    activity_name = window.activity_input.toPlainText()
+    w_touch(activity_name)
     w_touch('物资模式')
     w_touch('1-5')
     m_touch(Template(r"tpl1732055215502.png", record_pos=(0.291, 0.253), resolution=(1610, 932)))
-    m_touch(Template(r"tpl1732055226926.png", record_pos=(0.138, 0.02), resolution=(1610, 932)))
-    m_touch(Template(r"tpl1732055226926.png", record_pos=(0.138, 0.02), resolution=(1610, 932)))
+    touch_btn_plus(5)
     m_touch(Template(r"tpl1732055268161.png", record_pos=(0.106, 0.12), resolution=(1610, 932)))
     if m_exists(Template(r"tpl1732055268161.png", record_pos=(0.106, 0.12), resolution=(1610, 932))):
         sleep(2)
@@ -818,7 +875,8 @@ def shopping():
     else:
         backarrow_common()
     w_touch('易物所')
-    w_touch('冬日礼品铺')
+    activity_shop = window.shop_input.toPlainText()
+    w_touch(activity_shop)
     buy_item(True, 22)
     backarrow_common()
     w_touch('调度商店')

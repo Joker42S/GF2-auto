@@ -1,0 +1,1 @@
+"C:\Users\Administrator\AppData\Local\Programs\Python\Python39\python.exe" -u "G:\AirtestIDE\sample\custom_launcher.py" "G:\gf2.air" --log G:\gf2log
