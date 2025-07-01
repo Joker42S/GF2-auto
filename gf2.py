@@ -38,6 +38,7 @@ TASKS = {
     'weekly_task': '每周任务',
     'frontline_activity': '前线活动',
     'temporary_activity': '临时活动',
+    'period_task': '周期任务',
     'shopping': '购物'
 }
 
@@ -119,9 +120,18 @@ class MainWindow(QMainWindow):
             checkbox = QCheckBox(task_name)
             checkbox.setFont(big_font)  # 设置复选框字体
             checkbox.setChecked(True)  # 默认选中
+            checkbox.stateChanged.connect(self.update_select_all_button_text)  # 连接状态改变信号
             self.task_checkboxes[task_id] = checkbox
             tasks_layout.addWidget(checkbox)
         layout.addLayout(tasks_layout)
+
+        # 创建全选/反全选按钮
+        select_all_layout = QHBoxLayout()
+        self.select_all_button = QPushButton('反全选')
+        self.select_all_button.setFont(big_font)
+        select_all_layout.addWidget(self.select_all_button)
+        select_all_layout.addStretch()  # 添加弹簧，让按钮靠左对齐
+        layout.addLayout(select_all_layout)
 
         # 创建按钮区域
         button_layout = QHBoxLayout()
@@ -143,6 +153,7 @@ class MainWindow(QMainWindow):
         # 连接信号
         self.start_button.clicked.connect(self.start_tasks)
         self.stop_button.clicked.connect(self.stop_tasks)
+        self.select_all_button.clicked.connect(self.toggle_select_all)
 
     def load_config(self):
         try:
@@ -173,6 +184,9 @@ class MainWindow(QMainWindow):
             # 如果加载失败，默认选中所有任务
             for checkbox in self.task_checkboxes.values():
                 checkbox.setChecked(True)
+        
+        # 更新全选/反全选按钮文字
+        self.update_select_all_button_text()
 
     def save_config(self):
         selected_tasks = [task_id for task_id, checkbox in self.task_checkboxes.items() 
@@ -220,6 +234,28 @@ class MainWindow(QMainWindow):
             checkbox.setStyleSheet("color: green")
         else:
             checkbox.setStyleSheet("color: red")
+    
+    def toggle_select_all(self):
+        """切换全选/反全选状态"""
+        # 检查当前是否所有复选框都被选中
+        all_checked = all(checkbox.isChecked() for checkbox in self.task_checkboxes.values())
+        
+        # 如果全部选中，则反全选；否则全选
+        new_state = not all_checked
+        
+        for checkbox in self.task_checkboxes.values():
+            checkbox.setChecked(new_state)
+        
+        # 更新按钮文字
+        self.update_select_all_button_text()
+    
+    def update_select_all_button_text(self):
+        """更新全选/反全选按钮的文字"""
+        all_checked = all(checkbox.isChecked() for checkbox in self.task_checkboxes.values())
+        if all_checked:
+            self.select_all_button.setText('反全选')
+        else:
+            self.select_all_button.setText('全选')
 
 def get_window_title_bar_height():
     global Title_Bar_Height
@@ -546,7 +582,30 @@ def buy_item(is_buyout = False, item_num = 0, item_list = []):
             if is_buyout:
                 #已经卖空
                 break 
-
+def is_homepage():
+    if w_exists('战役推进') and w_exists('限时开启') and w_exists('商城') and w_exists('委托'):
+        return True
+    
+def login_check():
+    if m_exists(Template(r"login_logo_1.png", resolution=(1600, 900))) and m_exists(Template(r"login_logo_2.png", resolution=(1600, 900))):
+        for i in range(60):
+            sleep(10)
+            if w_exists('点击开始'):
+                break
+        w_touch('点击开始')
+    for i in range(60):
+        sleep(10)
+        if is_homepage():
+            break
+        if collect_reward():
+            if w_exists('每日出勤单'):
+                backarrow_common()
+                break
+        if w_exists('每日出勤单'):
+            backarrow_common()
+            return True
+    return False
+    
 def mailbox():
     if not m_exists(Template(r"tpl1737028627007.png", threshold=0.9000000000000001, record_pos=(-0.443, 0.125), resolution=(1610, 932))):
         return
@@ -584,19 +643,19 @@ def ally_area():
                 break
             m_touch(Template(r"tpl1724038855595.png", record_pos=(0.226, 0.25), resolution=(1564, 900)))
             # #重置后直接选最前面的4个
-            click_fixed_pos(110, 354)
-            click_fixed_pos(110+115, 354)
-            click_fixed_pos(110+115*2, 354)
-            click_fixed_pos(110+115*3, 354)
+            click_fixed_pos(100, 400)
+            click_fixed_pos(100+115, 400)
+            click_fixed_pos(100+115*2, 400)
+            click_fixed_pos(100+115*3, 400)
             m_touch(Template(r"tpl1724039182987.png", record_pos=(0.422, 0.193), resolution=(1600, 900)))
             zhuzhan_region = (260, 175, 1340, 900)
-            w_touch('电导', region = zhuzhan_region)
-            w_touch('莱娅', region = zhuzhan_region)
+            w_touch('火力', region = zhuzhan_region)
+            w_touch('可露凯', region = zhuzhan_region)
             m_touch(Template(r"tpl1724039310900.png", record_pos=(0.32, 0.187), resolution=(1408, 900)))
             if m_exists(Template(r"tpl1724931239978.png", record_pos=(0.0, -0.126), resolution=(1600, 900))) and w_exists('队伍中有相同角色'):
                 m_touch(Template(r"tpl1724931266467.png", record_pos=(0.107, 0.111), resolution=(1600, 900)))
                 #补空位
-                click_fixed_pos(110+115*4, 354)
+                click_fixed_pos(100+115*4, 400)
             m_touch(Template(r"tpl1724038095179.png", record_pos=(0.384, 0.244), resolution=(1600, 900)))
             sleep(2)
             battle_common(360)
@@ -671,7 +730,7 @@ def daily_battle():
         if m_exists(Template(r"tpl1724236208525.png", record_pos=(0.001, -0.127), resolution=(1600, 900))):
             m_touch(Template(r"tpl1724236220728.png", record_pos=(-0.107, 0.113), resolution=(1600, 900)))
         #直接选中间的对手
-        click_fixed_pos(800, 420)
+        click_fixed_pos(300, 420)
         if w_exists('基础防守演习'):
             m_touch(Template(r"tpl1724224751372.png", record_pos=(0.261, 0.124), resolution=(1600, 900)))
             sleep(2)
@@ -680,8 +739,9 @@ def daily_battle():
                 backarrow_common()
                 break
             else:
-                battle_common(10, not first_battle)
-                first_battle = False
+                battle_common(10)
+#                 battle_common(10, not first_battle)
+#                 first_battle = False
         else:
             pass
     #关闭选择对手页面
@@ -788,13 +848,11 @@ def weekly_task():
     if not _v_btn_zilv:
         return_home()
         return
-    for i in range(3):
-        m_touch(_v_btn_zilv)
-        if w_exists('自律准备', is_isolating_word = True):
-            m_touch(Template(r"tpl1724649003384.png", rgb=True, record_pos=(0.219, 0.141), resolution=(1350, 900)))
-            collect_reward()
-        else:
-            break
+    m_touch(_v_btn_zilv)
+    if w_exists('自律准备', is_isolating_word = True):
+        touch_btn_plus(2)
+        m_touch(Template(r"tpl1724649003384.png", rgb=True, record_pos=(0.219, 0.141), resolution=(1350, 900)))
+        collect_reward()
     return_home()
 
 def frontline_activity():
@@ -840,6 +898,51 @@ def reusable_activity():
             pass
     return_home()
 
+def period_task():
+    w_touch('战役推进')
+    w_touch('模拟作战')
+    swipe((1300, 450), (300,450))
+    w_touch('兵棋推演')
+    sleep(2)
+    w_touch('奖励预览')
+    w_touch('参与奖励')
+    for i in range(3):
+        try:
+            w_touch('领取')
+            collect_reward()
+        except:
+            break
+    if not w_exists('未完成'):
+        #奖励已领完 不需要继续
+        backarrow_common()
+        return_home()
+        return
+    backarrow_common()
+    for i in range(5):
+        w_touch('匹配', is_isolating_word = True)
+        sleep(3)
+        if w_exists('百炼荣光'):
+            break
+        sleep(30)
+        dev.keyevent("{ESC}")
+        w_wait('退出作战')
+        w_touch('退出作战')
+        w_touch('确认', is_isolating_word = True)
+        w_wait('战斗失败')
+        sleep(2)
+        w_touch('战斗失败')
+        w_wait('百炼荣光')
+        w_touch('奖励预览')
+    w_touch('参与奖励')
+    for i in range(3):
+        try:
+            w_touch('领取')
+            collect_reward()
+        except:
+            break
+    backarrow_common()
+    return_home()
+    
 def temporary_activity():
     w_touch('限时开启')
     activity_name = window.activity_input.toPlainText()
@@ -854,6 +957,7 @@ def temporary_activity():
         keyevent("{ESC}")
     else:
         collect_reward()
+    backarrow_common()
     backarrow_common()
     return_home()
     
@@ -887,7 +991,7 @@ def shopping():
     backarrow_common()
     if w_exists('讯段交易'):
         w_touch('讯段交易')
-        buy_item(item_list = ['塞布丽娜心智存档', '访问许可', '基原信息核', '萨狄斯金', '次世代内存条'])
+        buy_item(item_list = ['塞布丽娜心智存档', '访问许可', '基原信息核'])
         backarrow_common()
     w_touch('人形堆栈')
     buy_item(item_list = ['火控校准芯片', '访问许可', '专访许可', '大容量内存条'])
@@ -898,7 +1002,3 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     app.exec_() 
-
-
-
-
