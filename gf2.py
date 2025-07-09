@@ -64,6 +64,7 @@ class TaskThread(QThread):
             except Exception as e:
                 self.task_status_signal.emit(task_name, False)
                 self.log_signal.emit(f"执行失败: {TASKS[task_name]}, 错误: {str(e)}")
+                break  # 当任务执行失败时，停止执行剩余任务
         self.log_signal.emit("所有任务执行完毕")
 
     def stop(self):
@@ -78,7 +79,7 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle('GF2自动化工具')
-        self.setGeometry(100, 100, 1200, 800)  # 增加窗口大小
+        self.setGeometry(100, 100, 1400, 800)  # 增加窗口宽度以适应两列布局
 
         # 设置大字体
         big_font = QFont()
@@ -88,33 +89,20 @@ class MainWindow(QMainWindow):
         # 创建主窗口部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
+        
+        # 创建主要的水平布局（两列）
+        main_layout = QHBoxLayout(central_widget)
 
-        # 创建配置区域
-        config_layout = QHBoxLayout()
+        # === 左列：任务选择区域 ===
+        left_column = QVBoxLayout()
         
-        # 活动名称配置
-        activity_label = QLabel('活动名称:')
-        activity_label.setFont(big_font)
-        self.activity_input = QTextEdit()
-        self.activity_input.setMaximumHeight(50)
-        self.activity_input.setFont(big_font)
-        config_layout.addWidget(activity_label)
-        config_layout.addWidget(self.activity_input)
+        # 添加任务选择标题
+        tasks_title = QLabel('任务选择')
+        tasks_title.setFont(big_font)
+        tasks_title.setStyleSheet("font-weight: bold; margin-bottom: 10px;")
+        left_column.addWidget(tasks_title)
         
-        # 商店名称配置
-        shop_label = QLabel('商店名称:')
-        shop_label.setFont(big_font)
-        self.shop_input = QTextEdit()
-        self.shop_input.setMaximumHeight(50)
-        self.shop_input.setFont(big_font)
-        config_layout.addWidget(shop_label)
-        config_layout.addWidget(self.shop_input)
-        
-        layout.addLayout(config_layout)
-
         # 创建任务选择区域
-        tasks_layout = QVBoxLayout()
         self.task_checkboxes = {}
         for task_id, task_name in TASKS.items():
             checkbox = QCheckBox(task_name)
@@ -122,37 +110,102 @@ class MainWindow(QMainWindow):
             checkbox.setChecked(True)  # 默认选中
             checkbox.stateChanged.connect(self.update_select_all_button_text)  # 连接状态改变信号
             self.task_checkboxes[task_id] = checkbox
-            tasks_layout.addWidget(checkbox)
-        layout.addLayout(tasks_layout)
-
+            left_column.addWidget(checkbox)
+        
         # 创建全选/反全选按钮
         select_all_layout = QHBoxLayout()
         self.select_all_button = QPushButton('反全选')
         self.select_all_button.setFont(big_font)
         select_all_layout.addWidget(self.select_all_button)
         select_all_layout.addStretch()  # 添加弹簧，让按钮靠左对齐
-        layout.addLayout(select_all_layout)
+        left_column.addLayout(select_all_layout)
+        
+        # 添加弹簧，让左列内容靠顶部对齐
+        left_column.addStretch()
+
+        # === 右列：配置和控制区域 ===
+        right_column = QVBoxLayout()
+        
+        # 添加配置标题
+        config_title = QLabel('配置设置')
+        config_title.setFont(big_font)
+        config_title.setStyleSheet("font-weight: bold; margin-bottom: 10px;")
+        right_column.addWidget(config_title)
+        
+        # 创建配置区域（垂直布局）
+        config_layout = QVBoxLayout()
+        
+        # 活动名称配置
+        activity_layout = QHBoxLayout()
+        activity_label = QLabel('活动名称:')
+        activity_label.setFont(big_font)
+        activity_label.setMinimumWidth(120)
+        self.activity_input = QTextEdit()
+        self.activity_input.setMaximumHeight(50)
+        self.activity_input.setFont(big_font)
+        activity_layout.addWidget(activity_label)
+        activity_layout.addWidget(self.activity_input)
+        config_layout.addLayout(activity_layout)
+        
+        # 子活动名称配置
+        sub_activity_layout = QHBoxLayout()
+        sub_activity_label = QLabel('子活动名称:')
+        sub_activity_label.setFont(big_font)
+        sub_activity_label.setMinimumWidth(120)
+        self.sub_activity_input = QTextEdit()
+        self.sub_activity_input.setMaximumHeight(50)
+        self.sub_activity_input.setFont(big_font)
+        sub_activity_layout.addWidget(sub_activity_label)
+        sub_activity_layout.addWidget(self.sub_activity_input)
+        config_layout.addLayout(sub_activity_layout)
+        
+        # 商店名称配置
+        shop_layout = QHBoxLayout()
+        shop_label = QLabel('商店名称:')
+        shop_label.setFont(big_font)
+        shop_label.setMinimumWidth(120)
+        self.shop_input = QTextEdit()
+        self.shop_input.setMaximumHeight(50)
+        self.shop_input.setFont(big_font)
+        shop_layout.addWidget(shop_label)
+        shop_layout.addWidget(self.shop_input)
+        config_layout.addLayout(shop_layout)
+        
+        right_column.addLayout(config_layout)
 
         # 创建按钮区域
         button_layout = QHBoxLayout()
         self.start_button = QPushButton('开始执行')
         self.stop_button = QPushButton('停止执行')
+        self.save_config_button = QPushButton('保存配置')
         self.start_button.setFont(big_font)  # 设置按钮字体
         self.stop_button.setFont(big_font)  # 设置按钮字体
+        self.save_config_button.setFont(big_font)  # 设置按钮字体
         self.stop_button.setEnabled(False)
         button_layout.addWidget(self.start_button)
         button_layout.addWidget(self.stop_button)
-        layout.addLayout(button_layout)
+        button_layout.addWidget(self.save_config_button)
+        right_column.addLayout(button_layout)
 
         # 创建日志区域
+        log_title = QLabel('执行日志')
+        log_title.setFont(big_font)
+        log_title.setStyleSheet("font-weight: bold; margin-top: 20px; margin-bottom: 10px;")
+        right_column.addWidget(log_title)
+        
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setFont(big_font)  # 设置日志区域字体
-        layout.addWidget(self.log_text)
+        right_column.addWidget(self.log_text)
+
+        # 将左右两列添加到主布局
+        main_layout.addLayout(left_column, 1)  # 左列占1份
+        main_layout.addLayout(right_column, 2)  # 右列占2份，给更多空间
 
         # 连接信号
         self.start_button.clicked.connect(self.start_tasks)
         self.stop_button.clicked.connect(self.stop_tasks)
+        self.save_config_button.clicked.connect(self.save_config_with_feedback)
         self.select_all_button.clicked.connect(self.toggle_select_all)
 
     def load_config(self):
@@ -161,6 +214,7 @@ class MainWindow(QMainWindow):
                 with open('config.json', 'r', encoding='utf-8') as f:
                     config = json.load(f)
                     self.activity_input.setText(config.get('activity_name', '拂晓的回响'))
+                    self.sub_activity_input.setText(config.get('activity_subname', ''))
                     self.shop_input.setText(config.get('activity_shop', '营地小店'))
                     # 加载上次选择的任务
                     last_tasks = config.get('last_tasks', [])
@@ -180,6 +234,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.log(f"加载配置失败: {str(e)}")
             self.activity_input.setText('拂晓的回响')
+            self.sub_activity_input.setText('')
             self.shop_input.setText('营地小店')
             # 如果加载失败，默认选中所有任务
             for checkbox in self.task_checkboxes.values():
@@ -193,11 +248,20 @@ class MainWindow(QMainWindow):
                          if checkbox.isChecked()]
         config = {
             'activity_name': self.activity_input.toPlainText(),
+            'activity_subname': self.sub_activity_input.toPlainText(),
             'activity_shop': self.shop_input.toPlainText(),
             'last_tasks': selected_tasks
         }
         with open('config.json', 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=4)
+
+    def save_config_with_feedback(self):
+        """保存配置并提供用户反馈"""
+        try:
+            self.save_config()
+            self.log("配置保存成功")
+        except Exception as e:
+            self.log(f"配置保存失败: {str(e)}")
 
     def log(self, message):
         self.log_text.append(message)
@@ -649,7 +713,7 @@ def ally_area():
             click_fixed_pos(100+115*3, 400)
             m_touch(Template(r"tpl1724039182987.png", record_pos=(0.422, 0.193), resolution=(1600, 900)))
             zhuzhan_region = (260, 175, 1340, 900)
-            w_touch('火力', region = zhuzhan_region)
+            w_touch('酸蚀', region = zhuzhan_region)
             w_touch('可露凯', region = zhuzhan_region)
             m_touch(Template(r"tpl1724039310900.png", record_pos=(0.32, 0.187), resolution=(1408, 900)))
             if m_exists(Template(r"tpl1724931239978.png", record_pos=(0.0, -0.126), resolution=(1600, 900))) and w_exists('队伍中有相同角色'):
@@ -932,7 +996,7 @@ def period_task():
         sleep(2)
         w_touch('战斗失败')
         w_wait('百炼荣光')
-        w_touch('奖励预览')
+    w_touch('奖励预览')
     w_touch('参与奖励')
     for i in range(3):
         try:
@@ -947,7 +1011,10 @@ def temporary_activity():
     w_touch('限时开启')
     activity_name = window.activity_input.toPlainText()
     w_touch(activity_name)
-    w_touch('物资模式')
+    sub_activity_name = window.sub_activity_input.toPlainText()
+    if sub_activity_name != '':
+        w_touch(sub_activity_name)
+    w_touch('物资')
     w_touch('1-5')
     m_touch(Template(r"tpl1732055215502.png", record_pos=(0.291, 0.253), resolution=(1610, 932)))
     touch_btn_plus(5)
