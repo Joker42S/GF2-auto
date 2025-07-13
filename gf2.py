@@ -7,25 +7,22 @@ from airtest.core.settings import Settings as ST
 from paddleocr import PaddleOCR
 import time
 import win32gui
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, QPushButton, QTextEdit, QLabel
+import subprocess
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, QPushButton, QTextEdit, QLabel, QTabWidget, QLineEdit, QSpinBox, QFileDialog
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 import json
 import os
 
-auto_setup(__file__, devices=["Windows:///?title_re=EXILIUM"])
 
-dev = device()
-ST.OPDELAY = 2
-ST.SNAPSHOT_QUALITY = 80
+
+# 全局变量
+
 
 Window_Title = 'EXILIUM'
 Title_Bar_Height = 0
-
 ocr = PaddleOCR(use_angle_cls=False)
-
-# 全局变量
-window = None
+dev = None
 
 # 任务列表
 TASKS = {
@@ -46,19 +43,54 @@ class TaskThread(QThread):
     log_signal = pyqtSignal(str)
     task_status_signal = pyqtSignal(str, bool)  # 任务名, 是否成功
 
-    def __init__(self, tasks):
+    def __init__(self, tasks, config):
         super().__init__()
         self.tasks = tasks
+        self.config = config
         self.is_running = True
 
     def run(self):
+        global dev
+        try:
+            # 在执行任务前先设置环境
+            self.log_signal.emit("开始初始化环境...")
+            setup_env(
+                self.config.get('process_title', 'EXILIUM'),
+                self.config.get('operation_delay', 2),
+                self.config.get('log_path', './logs'),
+                self.config.get('startup_path', '')
+            )
+            
+            # 执行登录检查
+            self.log_signal.emit("执行登录检查...")
+            login_check()
+            self.log_signal.emit("环境初始化完成")
+            
+        except Exception as e:
+            self.log_signal.emit(f"环境初始化失败: {str(e)}")
+            return
+        
         for task_name in self.tasks:
             if not self.is_running:
                 break
             try:
                 self.log_signal.emit(f"开始执行: {TASKS[task_name]}")
                 task_func = globals()[task_name]
-                task_func()
+                
+                # 根据任务类型传递不同的配置参数
+                if task_name == 'temporary_activity':
+                    task_func(
+                        activity_name=self.config.get('activity_name', ''),
+                        sub_activity_name=self.config.get('activity_subname', '')
+                    )
+                elif task_name == 'shopping':
+                    task_func(
+                        activity_shop=self.config.get('activity_shop', ''),
+                        sub_shop_name=self.config.get('activity_subshop', '')
+                    )
+                else:
+                    task_func()
+                
                 self.task_status_signal.emit(task_name, True)
                 self.log_signal.emit(f"执行成功: {TASKS[task_name]}")
             except Exception as e:
@@ -90,13 +122,33 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
+        # 创建主布局
+        main_layout = QVBoxLayout(central_widget)
+        
+        # 创建标签页控件
+        self.tab_widget = QTabWidget()
+        main_layout.addWidget(self.tab_widget)
+        
+        # 创建任务执行标签页
+        self.create_task_tab()
+        
+        # 创建全局配置标签页
+        self.create_config_tab()
+
+    def create_task_tab(self):
+        """创建任务执行标签页"""
+        task_tab = QWidget()
+        self.tab_widget.addTab(task_tab, '任务执行')
+        
         # 创建主要的水平布局（两列）
-        main_layout = QHBoxLayout(central_widget)
+        main_layout = QHBoxLayout(task_tab)
 
         # === 左列：任务选择区域 ===
         left_column = QVBoxLayout()
         
         # 添加任务选择标题
+        big_font = QFont()
+        big_font.setPointSize(16)
         tasks_title = QLabel('任务选择')
         tasks_title.setFont(big_font)
         tasks_title.setStyleSheet("font-weight: bold; margin-bottom: 10px;")
@@ -171,6 +223,18 @@ class MainWindow(QMainWindow):
         shop_layout.addWidget(self.shop_input)
         config_layout.addLayout(shop_layout)
         
+        # 子商店名称配置
+        sub_shop_layout = QHBoxLayout()
+        sub_shop_label = QLabel('子商店名称:')
+        sub_shop_label.setFont(big_font)
+        sub_shop_label.setMinimumWidth(120)
+        self.sub_shop_input = QTextEdit()
+        self.sub_shop_input.setMaximumHeight(50)
+        self.sub_shop_input.setFont(big_font)
+        sub_shop_layout.addWidget(sub_shop_label)
+        sub_shop_layout.addWidget(self.sub_shop_input)
+        config_layout.addLayout(sub_shop_layout)
+        
         right_column.addLayout(config_layout)
 
         # 创建按钮区域
@@ -208,19 +272,150 @@ class MainWindow(QMainWindow):
         self.save_config_button.clicked.connect(self.save_config_with_feedback)
         self.select_all_button.clicked.connect(self.toggle_select_all)
 
+    def create_config_tab(self):
+        """创建全局配置标签页"""
+        config_tab = QWidget()
+        self.tab_widget.addTab(config_tab, '全局配置')
+        
+        # 设置字体
+        big_font = QFont()
+        big_font.setPointSize(16)
+        
+        # 创建主布局
+        main_layout = QVBoxLayout(config_tab)
+        
+        # 创建配置表单
+        form_layout = QVBoxLayout()
+        
+        # 启动路径配置
+        startup_layout = QHBoxLayout()
+        startup_label = QLabel('启动路径:')
+        startup_label.setFont(big_font)
+        startup_label.setMinimumWidth(120)
+        self.startup_path_input = QLineEdit()
+        self.startup_path_input.setFont(big_font)
+        self.startup_path_input.setPlaceholderText('请选择或输入启动路径')
+        startup_browse_btn = QPushButton('浏览')
+        startup_browse_btn.setFont(big_font)
+        startup_browse_btn.clicked.connect(self.browse_startup_path)
+        startup_layout.addWidget(startup_label)
+        startup_layout.addWidget(self.startup_path_input)
+        startup_layout.addWidget(startup_browse_btn)
+        form_layout.addLayout(startup_layout)
+        
+        # 日志路径配置
+        log_layout = QHBoxLayout()
+        log_label = QLabel('日志路径:')
+        log_label.setFont(big_font)
+        log_label.setMinimumWidth(120)
+        self.log_path_input = QLineEdit()
+        self.log_path_input.setFont(big_font)
+        self.log_path_input.setPlaceholderText('请选择或输入日志路径')
+        log_browse_btn = QPushButton('浏览')
+        log_browse_btn.setFont(big_font)
+        log_browse_btn.clicked.connect(self.browse_log_path)
+        log_layout.addWidget(log_label)
+        log_layout.addWidget(self.log_path_input)
+        log_layout.addWidget(log_browse_btn)
+        form_layout.addLayout(log_layout)
+        
+        # 目标进程标题配置
+        process_layout = QHBoxLayout()
+        process_label = QLabel('目标进程标题:')
+        process_label.setFont(big_font)
+        process_label.setMinimumWidth(120)
+        self.process_title_input = QLineEdit()
+        self.process_title_input.setFont(big_font)
+        self.process_title_input.setPlaceholderText('请输入目标进程窗口标题')
+        process_layout.addWidget(process_label)
+        process_layout.addWidget(self.process_title_input)
+        form_layout.addLayout(process_layout)
+        
+        # 操作延时配置
+        delay_layout = QHBoxLayout()
+        delay_label = QLabel('操作延时(秒):')
+        delay_label.setFont(big_font)
+        delay_label.setMinimumWidth(120)
+        self.operation_delay_input = QSpinBox()
+        self.operation_delay_input.setFont(big_font)
+        self.operation_delay_input.setMinimum(1)
+        self.operation_delay_input.setMaximum(10)
+        self.operation_delay_input.setValue(2)
+        self.operation_delay_input.setSuffix(' 秒')
+        delay_layout.addWidget(delay_label)
+        delay_layout.addWidget(self.operation_delay_input)
+        delay_layout.addStretch()
+        form_layout.addLayout(delay_layout)
+        
+        main_layout.addLayout(form_layout)
+        
+        # 添加保存按钮
+        save_global_btn = QPushButton('保存全局配置')
+        save_global_btn.setFont(big_font)
+        save_global_btn.clicked.connect(self.save_global_config)
+        main_layout.addWidget(save_global_btn)
+        
+        # 添加弹簧，让配置项靠顶部对齐
+        main_layout.addStretch()
+        
+    def browse_startup_path(self):
+        """浏览启动路径"""
+        file_path, _ = QFileDialog.getOpenFileName(self, '选择启动程序', '', 'Executable Files (*.exe)')
+        if file_path:
+            self.startup_path_input.setText(file_path)
+            
+    def browse_log_path(self):
+        """浏览日志路径"""
+        dir_path = QFileDialog.getExistingDirectory(self, '选择日志目录')
+        if dir_path:
+            self.log_path_input.setText(dir_path)
+            
+    def save_global_config(self):
+        """保存全局配置"""
+        try:
+            # 读取现有配置
+            config = {}
+            if os.path.exists('config.json'):
+                with open('config.json', 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+            
+            # 更新全局配置
+            config.update({
+                'startup_path': self.startup_path_input.text(),
+                'log_path': self.log_path_input.text(),
+                'process_title': self.process_title_input.text(),
+                'operation_delay': self.operation_delay_input.value()
+            })
+            
+            # 保存配置
+            with open('config.json', 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=4)
+                
+            self.log("全局配置保存成功")
+        except Exception as e:
+            self.log(f"全局配置保存失败: {str(e)}")
+
     def load_config(self):
         try:
             if os.path.exists('config.json'):
                 with open('config.json', 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                    self.activity_input.setText(config.get('activity_name', '拂晓的回响'))
+                    # 加载任务配置
+                    self.activity_input.setText(config.get('activity_name', ''))
                     self.sub_activity_input.setText(config.get('activity_subname', ''))
-                    self.shop_input.setText(config.get('activity_shop', '营地小店'))
+                    self.shop_input.setText(config.get('activity_shop', ''))
+                    self.sub_shop_input.setText(config.get('activity_subshop', ''))
                     # 加载上次选择的任务
                     last_tasks = config.get('last_tasks', [])
                     for task_id in last_tasks:
                         if task_id in self.task_checkboxes:
                             self.task_checkboxes[task_id].setChecked(True)
+                    
+                    # 加载全局配置
+                    self.startup_path_input.setText(config.get('startup_path', ''))
+                    self.log_path_input.setText(config.get('log_path', ''))
+                    self.process_title_input.setText(config.get('process_title', 'EXILIUM'))
+                    self.operation_delay_input.setValue(config.get('operation_delay', 2))
             else:
                 # 如果配置文件不存在，尝试从last_tasks.json加载
                 if os.path.exists('last_tasks.json'):
@@ -231,14 +426,21 @@ class MainWindow(QMainWindow):
                                 self.task_checkboxes[task_id].setChecked(True)
                     # 迁移完成后删除旧文件
                     os.remove('last_tasks.json')
+                # 设置默认的全局配置
+                self.process_title_input.setText('EXILIUM')
+                self.operation_delay_input.setValue(2)
         except Exception as e:
             self.log(f"加载配置失败: {str(e)}")
             self.activity_input.setText('拂晓的回响')
             self.sub_activity_input.setText('')
             self.shop_input.setText('营地小店')
+            self.sub_shop_input.setText('')
             # 如果加载失败，默认选中所有任务
             for checkbox in self.task_checkboxes.values():
                 checkbox.setChecked(True)
+            # 设置默认的全局配置
+            self.process_title_input.setText('EXILIUM')
+            self.operation_delay_input.setValue(2)
         
         # 更新全选/反全选按钮文字
         self.update_select_all_button_text()
@@ -250,7 +452,12 @@ class MainWindow(QMainWindow):
             'activity_name': self.activity_input.toPlainText(),
             'activity_subname': self.sub_activity_input.toPlainText(),
             'activity_shop': self.shop_input.toPlainText(),
-            'last_tasks': selected_tasks
+            'activity_subshop': self.sub_shop_input.toPlainText(),
+            'last_tasks': selected_tasks,
+            'startup_path': self.startup_path_input.text(),
+            'log_path': self.log_path_input.text(),
+            'process_title': self.process_title_input.text(),
+            'operation_delay': self.operation_delay_input.value()
         }
         with open('config.json', 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=4)
@@ -277,7 +484,19 @@ class MainWindow(QMainWindow):
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         
-        self.task_thread = TaskThread(selected_tasks)
+        # 获取当前配置
+        config = {
+            'process_title': self.process_title_input.text(),
+            'operation_delay': self.operation_delay_input.value(),
+            'log_path': self.log_path_input.text(),
+            'startup_path': self.startup_path_input.text(),
+            'activity_name': self.activity_input.toPlainText(),
+            'activity_subname': self.sub_activity_input.toPlainText(),
+            'activity_shop': self.shop_input.toPlainText(),
+            'activity_subshop': self.sub_shop_input.toPlainText()
+        }
+        
+        self.task_thread = TaskThread(selected_tasks, config)
         self.task_thread.log_signal.connect(self.log)
         self.task_thread.task_status_signal.connect(self.update_task_status)
         self.task_thread.finished.connect(self.on_tasks_finished)
@@ -594,7 +813,7 @@ def has_ap_alert():
     :return: 是否有体力不足提示
     """
     if w_exists('情报拼图补充'):
-        m_touch(Template(r"tpl1724226645988.png", record_pos=(-0.108, 0.114), resolution=(1600, 900)))
+        m_touch(Template(r"tpl1724226645988.png", record_pos=(-0.108, 0.114), resolution=(1610, 932)))
         return True
     else:
         return False
@@ -1007,12 +1226,11 @@ def period_task():
     backarrow_common()
     return_home()
     
-def temporary_activity():
+def temporary_activity(activity_name='', sub_activity_name=''):
     w_touch('限时开启')
-    activity_name = window.activity_input.toPlainText()
-    w_touch(activity_name)
-    sub_activity_name = window.sub_activity_input.toPlainText()
-    if sub_activity_name != '':
+    if activity_name:
+        w_touch(activity_name)
+    if sub_activity_name:
         w_touch(sub_activity_name)
     w_touch('物资')
     w_touch('1-5')
@@ -1028,7 +1246,7 @@ def temporary_activity():
     backarrow_common()
     return_home()
     
-def shopping():
+def shopping(activity_shop='', sub_shop_name=''):
     w_touch('商城')
     w_touch('品质甄选')
     w_touch('限时礼包')
@@ -1045,9 +1263,12 @@ def shopping():
         collect_reward()
     else:
         backarrow_common()
+    sleep(2)
     w_touch('易物所')
-    activity_shop = window.shop_input.toPlainText()
-    w_touch(activity_shop)
+    if activity_shop:
+        w_touch(activity_shop)
+    if sub_shop_name:
+        w_touch(sub_shop_name)
     buy_item(True, 22)
     backarrow_common()
     w_touch('调度商店')
@@ -1064,8 +1285,44 @@ def shopping():
     buy_item(item_list = ['火控校准芯片', '访问许可', '专访许可', '大容量内存条'])
     backarrow_common()
 
+def setup_env(title_name, OPDELAY, LOG_DIR, startup_path):
+    global Window_Title, dev
+    Window_Title = title_name
+    ST.OPDELAY = OPDELAY
+    ST.SNAPSHOT_QUALITY = 80
+    if LOG_DIR:
+        ST.LOG_DIR = LOG_DIR
+    
+    #检查目标Windows进程是否运行，如果未运行则启动
+    gf2_window = win32gui.FindWindow(None, title_name)
+    print(f"查找窗口 '{title_name}': {gf2_window}")
+    
+    if gf2_window == 0:  # FindWindow返回0表示未找到窗口
+        print("目标窗口未运行，准备启动...")
+        if startup_path:
+            #根据配置中的startup_path，启动
+            print(f"启动程序: {startup_path}")
+            subprocess.Popen(startup_path)
+            time.sleep(30)
+            gf2_window = win32gui.FindWindow(None, title_name)
+            print(f"重新查找窗口: {gf2_window}")
+            if gf2_window == 0:
+                raise Exception("目标窗口未运行")
+            else:
+                print("目标窗口已启动并运行")
+        else:
+            raise Exception("目标窗口未运行且未设置启动路径")
+    else:
+        print("目标窗口已运行")
+    
+    if dev is None:
+        auto_setup(__file__, devices=["Windows:///?title_re=" + title_name])
+        dev = device()
+
+
+
 if __name__ == "__main__":
     app = QApplication([])
-    window = MainWindow()
-    window.show()
+    main_window = MainWindow()
+    main_window.show()
     app.exec_() 
