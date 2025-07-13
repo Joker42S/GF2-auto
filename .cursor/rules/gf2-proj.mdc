@@ -14,4 +14,4 @@ This is a Win-platform project.
 This project is based on Airtest UI Automation Framework.
 You need follow Airtest's API guide in https://airtest.readthedocs.io/en/latest/.
 
-不要自行运行测试，用户会手动执行测试
+# 不要自行运行测试，用户会手动执行测试

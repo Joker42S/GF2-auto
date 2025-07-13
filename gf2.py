@@ -8,8 +8,8 @@ from paddleocr import PaddleOCR
 import time
 import win32gui
 import subprocess
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, QPushButton, QTextEdit, QLabel, QTabWidget, QLineEdit, QSpinBox, QFileDialog
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, QPushButton, QTextEdit, QLabel, QTabWidget, QLineEdit, QSpinBox, QFileDialog, QTimeEdit
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QTime
 from PyQt5.QtGui import QFont
 import json
 import os
@@ -106,6 +106,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.task_thread = None
+        self.schedule_timer = QTimer()
+        self.schedule_timer.timeout.connect(self.execute_scheduled_tasks)
         self.init_ui()
         self.load_config()
 
@@ -347,6 +349,55 @@ class MainWindow(QMainWindow):
         delay_layout.addStretch()
         form_layout.addLayout(delay_layout)
         
+        # 添加分隔线
+        separator = QLabel()
+        separator.setStyleSheet("border-top: 1px solid #ccc; margin: 20px 0;")
+        form_layout.addWidget(separator)
+        
+        # 定时功能标题
+        schedule_title = QLabel('定时功能')
+        schedule_title.setFont(big_font)
+        schedule_title.setStyleSheet("font-weight: bold; margin-bottom: 10px;")
+        form_layout.addWidget(schedule_title)
+        
+        # 定时功能开关
+        schedule_enable_layout = QHBoxLayout()
+        self.schedule_enable_checkbox = QCheckBox('启用定时执行（勾选后自动启动定时器）')
+        self.schedule_enable_checkbox.setFont(big_font)
+        self.schedule_enable_checkbox.stateChanged.connect(self.on_schedule_enable_changed)
+        schedule_enable_layout.addWidget(self.schedule_enable_checkbox)
+        schedule_enable_layout.addStretch()
+        form_layout.addLayout(schedule_enable_layout)
+        
+        # 定时时间设置
+        time_layout = QHBoxLayout()
+        time_label = QLabel('执行时间:')
+        time_label.setFont(big_font)
+        time_label.setMinimumWidth(120)
+        self.schedule_time_input = QTimeEdit()
+        self.schedule_time_input.setFont(big_font)
+        self.schedule_time_input.setTime(QTime(9, 0))  # 默认09:00
+        self.schedule_time_input.setDisplayFormat('HH:mm')
+        time_layout.addWidget(time_label)
+        time_layout.addWidget(self.schedule_time_input)
+        time_layout.addStretch()
+        form_layout.addLayout(time_layout)
+        
+        # 定时器状态显示
+        status_layout = QHBoxLayout()
+        status_label = QLabel('定时器状态:')
+        status_label.setFont(big_font)
+        status_label.setMinimumWidth(120)
+        self.schedule_status_label = QLabel('已停止')
+        self.schedule_status_label.setFont(big_font)
+        self.schedule_status_label.setStyleSheet("color: #666;")
+        status_layout.addWidget(status_label)
+        status_layout.addWidget(self.schedule_status_label)
+        status_layout.addStretch()
+        form_layout.addLayout(status_layout)
+        
+
+        
         main_layout.addLayout(form_layout)
         
         # 添加保存按钮
@@ -384,16 +435,96 @@ class MainWindow(QMainWindow):
                 'startup_path': self.startup_path_input.text(),
                 'log_path': self.log_path_input.text(),
                 'process_title': self.process_title_input.text(),
-                'operation_delay': self.operation_delay_input.value()
+                'operation_delay': self.operation_delay_input.value(),
+                'schedule_enabled': self.schedule_enable_checkbox.isChecked(),
+                'schedule_time': self.schedule_time_input.time().toString('HH:mm')
             })
             
             # 保存配置
             with open('config.json', 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=4)
                 
+            # 如果定时器正在运行，重新启动定时器以应用新的时间设置
+            self.refresh_schedule_timer()
+                
             self.log("全局配置保存成功")
         except Exception as e:
             self.log(f"全局配置保存失败: {str(e)}")
+    
+    def on_schedule_enable_changed(self, state):
+        """处理定时功能开关状态变化"""
+        enabled = state == Qt.Checked
+        self.schedule_time_input.setEnabled(enabled)
+        
+        if enabled:
+            self.start_schedule_timer()
+        else:
+            self.stop_schedule_timer()
+    
+    def refresh_schedule_timer(self):
+        """刷新定时器状态，应用新的时间设置"""
+        if self.schedule_enable_checkbox.isChecked():
+            # 如果定时功能启用，重新启动定时器（不管之前是否运行）
+            if self.schedule_timer.isActive():
+                self.stop_schedule_timer()
+            self.start_schedule_timer()
+            self.log("定时器已根据新配置重新启动")
+        else:
+            # 如果定时功能禁用，停止定时器
+            if self.schedule_timer.isActive():
+                self.stop_schedule_timer()
+    
+    def start_schedule_timer(self):
+        """启动定时器"""
+        # 获取设置的时间
+        schedule_time = self.schedule_time_input.time()
+        current_time = QTime.currentTime()
+        
+        # 计算到目标时间的毫秒数
+        if schedule_time > current_time:
+            # 今天的目标时间还没到
+            ms_until_target = current_time.msecsTo(schedule_time)
+        else:
+            # 今天的目标时间已过，设置为明天的这个时间
+            ms_until_target = current_time.msecsTo(schedule_time) + 24 * 60 * 60 * 1000
+        
+        # 启动定时器
+        self.schedule_timer.start(ms_until_target)
+        self.schedule_status_label.setText(f"已启动 - 将在 {schedule_time.toString('HH:mm')} 执行")
+        self.schedule_status_label.setStyleSheet("color: #0066cc;")
+        self.log(f"定时器已启动，将在 {schedule_time.toString('HH:mm')} 执行任务")
+    
+    def stop_schedule_timer(self):
+        """停止定时器"""
+        self.schedule_timer.stop()
+        self.schedule_status_label.setText("已停止")
+        self.schedule_status_label.setStyleSheet("color: #666;")
+        self.log("定时器已停止")
+    
+    def execute_scheduled_tasks(self):
+        """执行定时任务"""
+        self.log("定时器触发，开始执行任务...")
+        
+        # 检查是否有任务在执行
+        if self.task_thread and self.task_thread.isRunning():
+            self.log("任务正在执行中，跳过本次定时执行")
+            # 重新设置定时器为明天的同一时间
+            self.schedule_timer.start(24 * 60 * 60 * 1000)
+            return
+        
+        # 检查定时功能是否仍然启用
+        if not self.schedule_enable_checkbox.isChecked():
+            self.log("定时功能已被禁用，停止定时执行")
+            return
+        
+        # 执行任务
+        self.start_tasks()
+        
+        # 重新设置定时器为明天的同一时间
+        self.schedule_timer.start(24 * 60 * 60 * 1000)  # 24小时后再次触发
+        schedule_time = self.schedule_time_input.time()
+        self.schedule_status_label.setText(f"已启动 - 将在明天 {schedule_time.toString('HH:mm')} 执行")
+        self.log("定时任务执行完成，定时器已重新设置为明天同一时间")
 
     def load_config(self):
         try:
@@ -416,6 +547,16 @@ class MainWindow(QMainWindow):
                     self.log_path_input.setText(config.get('log_path', ''))
                     self.process_title_input.setText(config.get('process_title', 'EXILIUM'))
                     self.operation_delay_input.setValue(config.get('operation_delay', 2))
+                    
+                    # 加载定时配置 - 先设置时间，再设置启用状态
+                    schedule_time_str = config.get('schedule_time', '09:00')
+                    schedule_time = QTime.fromString(schedule_time_str, 'HH:mm')
+                    if schedule_time.isValid():
+                        self.schedule_time_input.setTime(schedule_time)
+                    else:
+                        self.schedule_time_input.setTime(QTime(9, 0))
+                    # 最后设置启用状态，这样会触发正确的时间
+                    self.schedule_enable_checkbox.setChecked(config.get('schedule_enabled', False))
             else:
                 # 如果配置文件不存在，尝试从last_tasks.json加载
                 if os.path.exists('last_tasks.json'):
@@ -429,6 +570,8 @@ class MainWindow(QMainWindow):
                 # 设置默认的全局配置
                 self.process_title_input.setText('EXILIUM')
                 self.operation_delay_input.setValue(2)
+                self.schedule_enable_checkbox.setChecked(False)
+                self.schedule_time_input.setTime(QTime(9, 0))
         except Exception as e:
             self.log(f"加载配置失败: {str(e)}")
             self.activity_input.setText('拂晓的回响')
@@ -441,6 +584,8 @@ class MainWindow(QMainWindow):
             # 设置默认的全局配置
             self.process_title_input.setText('EXILIUM')
             self.operation_delay_input.setValue(2)
+            self.schedule_enable_checkbox.setChecked(False)
+            self.schedule_time_input.setTime(QTime(9, 0))
         
         # 更新全选/反全选按钮文字
         self.update_select_all_button_text()
@@ -457,7 +602,9 @@ class MainWindow(QMainWindow):
             'startup_path': self.startup_path_input.text(),
             'log_path': self.log_path_input.text(),
             'process_title': self.process_title_input.text(),
-            'operation_delay': self.operation_delay_input.value()
+            'operation_delay': self.operation_delay_input.value(),
+            'schedule_enabled': self.schedule_enable_checkbox.isChecked(),
+            'schedule_time': self.schedule_time_input.time().toString('HH:mm')
         }
         with open('config.json', 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=4)
@@ -466,6 +613,8 @@ class MainWindow(QMainWindow):
         """保存配置并提供用户反馈"""
         try:
             self.save_config()
+            # 如果定时器正在运行，重新启动定时器以应用新的时间设置
+            self.refresh_schedule_timer()
             self.log("配置保存成功")
         except Exception as e:
             self.log(f"配置保存失败: {str(e)}")
@@ -539,6 +688,15 @@ class MainWindow(QMainWindow):
             self.select_all_button.setText('反全选')
         else:
             self.select_all_button.setText('全选')
+    
+    def closeEvent(self, event):
+        """程序关闭时的清理工作"""
+        if self.schedule_timer.isActive():
+            self.schedule_timer.stop()
+        if self.task_thread and self.task_thread.isRunning():
+            self.task_thread.stop()
+            self.task_thread.wait()
+        event.accept()
 
 def get_window_title_bar_height():
     global Title_Bar_Height
