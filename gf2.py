@@ -738,14 +738,14 @@ def w_click(rect):
 def click_fixed_pos(x, y):
     click((x, y + get_window_title_bar_height()))
 
-def w_exists(target_word, confidence_threshold = 0.8, is_isolating_word = False, region = None, retry = 0):
+def w_exists(target_word, confidence_threshold = 0.8, is_isolating_word = False, region = None, retry = 3):
     """
     检查指定文字是否存在
     :param target_word: 要查找的文字
     :param confidence_threshold: OCR识别置信度阈值，默认0.8
     :param is_isolating_word: 是否要求完全匹配，默认False
     :param region: 搜索区域，默认None表示全屏
-    :param retry: 重试次数，默认0
+    :param retry: 重试次数，默认3
     :return: 如果找到文字返回其矩形区域，否则返回False
     """
     for i in range(retry + 1):
@@ -1044,8 +1044,8 @@ def login_check():
                 break
         if w_exists('每日出勤单'):
             backarrow_common()
-            return True
-    return False
+    if w_exists('欢乐庆典'):
+        backarrow_common()
     
 def mailbox():
     if not m_exists(Template(r"tpl1737028627007.png", threshold=0.9000000000000001, record_pos=(-0.443, 0.125), resolution=(1610, 932))):
@@ -1419,8 +1419,7 @@ def shopping(activity_shop='', sub_shop_name=''):
     if w_exists('购买', is_isolating_word = True):
         w_touch('购买', is_isolating_word = True)
         collect_reward()
-    else:
-        backarrow_common()
+    backarrow_common()
     sleep(2)
     w_touch('易物所')
     if activity_shop:
@@ -1430,15 +1429,15 @@ def shopping(activity_shop='', sub_shop_name=''):
     buy_item(True, 22)
     backarrow_common()
     w_touch('调度商店')
-    buy_item(item_list = ['访问许可', '紫色心意礼盒·一', '紫色心意礼盒·二', '紫色心意礼盒·三', '紫色心意礼盒·四', '紫色心意礼盒·五'])
+    buy_item(True, 14)
+    # buy_item(item_list = ['访问许可', '紫色心意礼盒·一', '紫色心意礼盒·二', '紫色心意礼盒·三', '紫色心意礼盒·四', '紫色心意礼盒·五'])
     backarrow_common()
     w_touch('班组商店')
     buy_item(item_list = ['波波沙心智存档', '火控校准芯片'])
     backarrow_common()
-    if w_exists('讯段交易'):
-        w_touch('讯段交易')
-        buy_item(item_list = ['塞布丽娜心智存档', '访问许可', '基原信息核'])
-        backarrow_common()
+    w_touch('讯段交易')
+    buy_item(item_list = ['塞布丽娜心智存档', '访问许可', '基原信息核'])
+    backarrow_common()
     w_touch('人形堆栈')
     buy_item(item_list = ['火控校准芯片', '访问许可', '专访许可', '大容量内存条'])
     backarrow_common()
