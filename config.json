@@ -1,9 +1,12 @@
 {
-    "activity_name": "密米尔的返演",
-    "activity_subname": "密米尔的返演·下篇",
-    "activity_shop": "安全屋",
-    "activity_subshop": "安全屋·下篇",
+    "activity_name": "烟火重燃",
+    "activity_subname": "",
+    "activity_shop": "积分找换",
+    "activity_subshop": "",
     "last_tasks": [
+        "reusable_activity",
+        "mailbox",
+        "public_area",
         "daily_battle",
         "daily_task",
         "weekly_task",

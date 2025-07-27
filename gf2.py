@@ -161,7 +161,7 @@ class MainWindow(QMainWindow):
         for task_id, task_name in TASKS.items():
             checkbox = QCheckBox(task_name)
             checkbox.setFont(big_font)  # 设置复选框字体
-            checkbox.setChecked(True)  # 默认选中
+            checkbox.setChecked(False)  # 默认未选中，由load_config决定选中状态
             checkbox.stateChanged.connect(self.update_select_all_button_text)  # 连接状态改变信号
             self.task_checkboxes[task_id] = checkbox
             left_column.addWidget(checkbox)
@@ -538,6 +538,10 @@ class MainWindow(QMainWindow):
                     self.sub_shop_input.setText(config.get('activity_subshop', ''))
                     # 加载上次选择的任务
                     last_tasks = config.get('last_tasks', [])
+                    # 首先将所有任务设置为未选中
+                    for checkbox in self.task_checkboxes.values():
+                        checkbox.setChecked(False)
+                    # 然后只选中配置文件中保存的任务
                     for task_id in last_tasks:
                         if task_id in self.task_checkboxes:
                             self.task_checkboxes[task_id].setChecked(True)
@@ -562,6 +566,10 @@ class MainWindow(QMainWindow):
                 if os.path.exists('last_tasks.json'):
                     with open('last_tasks.json', 'r', encoding='utf-8') as f:
                         last_tasks = json.load(f)
+                        # 首先将所有任务设置为未选中
+                        for checkbox in self.task_checkboxes.values():
+                            checkbox.setChecked(False)
+                        # 然后只选中配置文件中保存的任务
                         for task_id in last_tasks:
                             if task_id in self.task_checkboxes:
                                 self.task_checkboxes[task_id].setChecked(True)
@@ -578,9 +586,8 @@ class MainWindow(QMainWindow):
             self.sub_activity_input.setText('')
             self.shop_input.setText('营地小店')
             self.sub_shop_input.setText('')
-            # 如果加载失败，默认选中所有任务
-            for checkbox in self.task_checkboxes.values():
-                checkbox.setChecked(True)
+            # 如果加载失败，保持默认状态（未选中）
+            # 用户可以手动选择需要的任务
             # 设置默认的全局配置
             self.process_title_input.setText('EXILIUM')
             self.operation_delay_input.setValue(2)
@@ -1472,9 +1479,8 @@ def setup_env(title_name, OPDELAY, LOG_DIR, startup_path):
     else:
         print("目标窗口已运行")
     
-    if dev is None:
-        auto_setup(__file__, devices=["Windows:///?title_re=" + title_name])
-        dev = device()
+    auto_setup(__file__, devices=["Windows:///?title_re=" + title_name])
+    dev = device()
 
 
 
@@ -1482,4 +1488,4 @@ if __name__ == "__main__":
     app = QApplication([])
     main_window = MainWindow()
     main_window.show()
-    app.exec_() 
+    app.exec_()
