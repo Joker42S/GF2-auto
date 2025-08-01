@@ -1456,7 +1456,15 @@ def setup_env(title_name, OPDELAY, LOG_DIR, startup_path):
     ST.SNAPSHOT_QUALITY = 80
     if LOG_DIR:
         ST.LOG_DIR = LOG_DIR
-    
+    #清空文件夹中旧的日志
+    if os.path.exists(LOG_DIR):
+        # Remove only image files from LOG_DIR
+        for root, dirs, files in os.walk(LOG_DIR):
+            for file in files:
+                if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+                    os.remove(os.path.join(root, file))
+    else:
+        os.makedirs(LOG_DIR)
     #检查目标Windows进程是否运行，如果未运行则启动
     gf2_window = win32gui.FindWindow(None, title_name)
     print(f"查找窗口 '{title_name}': {gf2_window}")

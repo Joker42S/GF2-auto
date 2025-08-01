@@ -4,16 +4,7 @@
     "activity_shop": "积分找换",
     "activity_subshop": "",
     "last_tasks": [
-        "reusable_activity",
-        "mailbox",
-        "public_area",
-        "daily_battle",
-        "daily_task",
-        "weekly_task",
-        "frontline_activity",
-        "temporary_activity",
-        "period_task",
-        "shopping"
+        "ally_area"
     ],
     "startup_path": "F:/GF2Exilium/GF2 Game/GF2_Exilium.exe",
     "log_path": "G:/gf2log",
