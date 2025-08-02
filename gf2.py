@@ -1369,7 +1369,7 @@ def period_task():
     for i in range(5):
         w_touch('匹配', is_isolating_word = True)
         sleep(3)
-        if w_exists('百炼荣光'):
+        if w_exists('未上榜'):
             break
         sleep(30)
         dev.keyevent("{ESC}")
@@ -1379,7 +1379,7 @@ def period_task():
         w_wait('战斗失败')
         sleep(2)
         w_touch('战斗失败')
-        w_wait('百炼荣光')
+        w_wait('未上榜')
     w_touch('奖励预览')
     w_touch('参与奖励')
     for i in range(3):
@@ -1446,7 +1446,7 @@ def shopping(activity_shop='', sub_shop_name=''):
     buy_item(item_list = ['塞布丽娜心智存档', '访问许可', '基原信息核'])
     backarrow_common()
     w_touch('人形堆栈')
-    buy_item(item_list = ['火控校准芯片', '访问许可', '专访许可', '大容量内存条'])
+    buy_item(item_list = ['访问许可', '专访许可','火控校准芯片'])
     backarrow_common()
 
 def setup_env(title_name, OPDELAY, LOG_DIR, startup_path):
