@@ -1,1 +1,1 @@
-少前2日常自动化
+少前2日常自动化，基于Airtest+PaddleOcr
